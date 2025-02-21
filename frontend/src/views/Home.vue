@@ -1,16 +1,15 @@
 <template>
-  <BoardList v-if="!$route.params.id" />
-  <Board v-else :id="$route.params.id" />
+  <div>
+    <Board />
+  </div>
 </template>
 
 <script>
-import BoardList from '../components/BoardList.vue'
-import Board from '../components/Board.vue'
+import Board from '../components/Board.vue';
 
 export default {
   components: {
-    BoardList,
-    Board
-  }
-}
+    Board,
+  },
+};
 </script>

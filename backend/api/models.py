@@ -18,9 +18,3 @@ class Task(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-class SubTask(models.Model):
-    task = models.ForeignKey(Task, related_name='subtasks', on_delete=models.CASCADE)
-    name = models.CharField(max_length=255)
-    is_completed = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)

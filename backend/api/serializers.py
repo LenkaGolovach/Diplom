@@ -1,14 +1,7 @@
 from rest_framework import serializers
-from .models import Board, Column, Task, SubTask
-
-class SubTaskSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = SubTask
-        fields = '__all__'
+from .models import Board, Column, Task
 
 class TaskSerializer(serializers.ModelSerializer):
-    subtasks = SubTaskSerializer(many=True, read_only=True)
-    
     class Meta:
         model = Task
         fields = '__all__'
