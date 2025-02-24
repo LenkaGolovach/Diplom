@@ -68,7 +68,13 @@ export default {
         { id: 3, name: 'Готово', tasks: [], color: COLORS[2] },
       ],
       showModal: false,
-      currentTask: null,
+      currentTask: {
+        id: Date.now(),
+        name: '',
+        description: '',
+        subtasks: [],
+        files: [] 
+      },
       currentColumnIndex: null,
       isEditingBoardName: false,
     };
@@ -99,6 +105,7 @@ export default {
         name: '',
         description: '',
         subtasks: [],
+        files: []
       };
       this.currentColumnIndex = columnIndex;
       this.showModal = true;

@@ -73,6 +73,35 @@
         </div>
       </div>
 
+      <!-- Секция для прикрепленных файлов -->
+      <div class="file-section">
+        <label>Прикрепленные файлы:</label>
+        <div class="file-list">
+          <div v-for="(file, index) in task.files" :key="index" class="file-item">
+            <div class="file-preview" @click="downloadFile(file)">
+              <img v-if="isImage(file.type)" :src="file.url" class="thumbnail">
+              <div v-else class="file-icon">
+                <img src="/icons/file-icon.png" alt="Document Icon" class="file-icon-img">
+              </div>
+            </div>
+            <div class="file-info">
+              <span class="file-name">{{ file.name }}</span>
+              <button @click="removeFile(index)" class="delete-file">×</button>
+            </div>
+          </div>
+        </div>
+        
+        <label class="file-upload">
+          <input 
+            type="file" 
+            @change="handleFileUpload" 
+            multiple
+            class="file-input"
+          >
+          <span class="upload-button">+ Добавить файлы</span>
+        </label>
+      </div>
+
       <!-- Кнопки управления -->
       <div class="actions">
         <button @click="saveTask" class="save-button">Сохранить</button>
@@ -148,7 +177,40 @@ export default {
     },
     saveTask() {
       this.$emit('saveTask', this.task);
-    }
+    },
+    isImage(type) {
+      return type.startsWith('image/');
+    },
+    handleFileUpload(e) {
+      const files = e.target.files;
+      for (let i = 0; i < files.length; i++) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          // Инициализируем свойство files, если его нет
+          if (!this.task.files) {
+            this.$set(this.task, 'files', []);
+          }
+          this.task.files.push({
+            name: files[i].name,
+            type: files[i].type,
+            url: e.target.result
+          });
+        };
+        reader.readAsDataURL(files[i]);
+      }
+    },
+    removeFile(index) {
+      this.task.files.splice(index, 1);
+    },
+    downloadFile(file) {
+      // Создаем временную ссылку для скачивания
+      const link = document.createElement('a');
+      link.href = file.url;
+      link.download = file.name; // Имя файла при скачивании
+      document.body.appendChild(link);
+      link.click(); // Инициируем скачивание
+      document.body.removeChild(link); // Удаляем ссылку после скачивания
+    },
   }
 };
 </script>
@@ -299,5 +361,98 @@ export default {
   padding: 8px 16px;
   border-radius: 4px;
   cursor: pointer;
+}
+
+.file-section {
+  margin: 15px 0;
+}
+
+.file-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.file-preview {
+  width: 40px;
+  height: 40px;
+  margin-right: 12px;
+  cursor: pointer;
+}
+
+.thumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.file-icon {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f0f0f0;
+  border-radius: 4px;
+}
+
+.file-info {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.file-name {
+  font-size: 0.9em;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.delete-file {
+  background: none;
+  border: none;
+  color: #ff6b6b;
+  cursor: pointer;
+  font-size: 1.2em;
+  padding: 0 5px;
+}
+
+.file-upload {
+  display: block;
+  margin-top: 10px;
+}
+
+.file-input {
+  display: none;
+}
+
+.upload-button {
+  background: #f0f0f0;
+  padding: 8px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-block;
+  transition: background 0.3s;
+}
+
+.upload-button:hover {
+  background: #e0e0e0;
+}
+
+.file-icon-img {
+  width: 24px; /* Размер иконки */
+  height: 24px;
+  object-fit: contain; /* Сохраняет пропорции */
 }
 </style>
