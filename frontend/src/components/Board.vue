@@ -103,6 +103,13 @@ export default {
       this.currentColumnIndex = columnIndex;
       this.showModal = true;
     },
+    deleteTask(task) {
+    const columnIndex = this.columns.findIndex(col => col.tasks.includes(task));
+    if (columnIndex !== -1) {
+      const taskIndex = this.columns[columnIndex].tasks.indexOf(task);
+      this.columns[columnIndex].tasks.splice(taskIndex, 1);
+    }
+  },
     deleteColumn(columnIndex) {
       this.columns.splice(columnIndex, 1);
     },

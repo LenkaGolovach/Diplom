@@ -1,33 +1,48 @@
 <template>
   <div class="modal">
     <div class="modal-content">
-      <!-- Заголовок формы -->
-      <h2>Новая задача</h2>
-
-      <!-- Поле для названия задачи -->
-      <div class="form-group">
-        <label for="task-name">Название задачи:</label>
-        <input id="task-name" v-model="task.name" placeholder="Введите название задачи" />
+      <!-- Заголовок задачи с возможностью редактирования -->
+      <div class="task-header">
+        <div
+          v-if="!isEditingTitle"
+          class="task-title"
+          @dblclick="startEditingTitle"
+        >
+          {{ task.name || 'Новая задача' }}
+        </div>
+        <input
+          v-else
+          ref="titleInput"
+          v-model="task.name"
+          @blur="stopEditingTitle"
+          @keyup.enter="stopEditingTitle"
+          class="task-title-input"
+          placeholder="Название задачи"
+        />
       </div>
 
-      <!-- Поле для описания задачи -->
+      <!-- Описание задачи -->
       <div class="form-group">
-        <label for="task-description">Описание задачи:</label>
+        <label>Описание:</label>
         <textarea
-          id="task-description"
           v-model="task.description"
           placeholder="Введите описание задачи"
+          class="description-input"
         ></textarea>
       </div>
 
-      <!-- Прогресс-бар -->
-      <div class="progress-bar">
-        <div class="progress" :style="{ width: progress + '%' }"></div>
+      <!-- Прогресс-бар (только если есть подзадачи) -->
+      <div v-if="hasSubtasks" class="progress-container">
+        <div class="progress-bar">
+          <div class="progress" :style="{ width: progress + '%' }"></div>
+        </div>
+        <div class="progress-text">{{ progress }}% выполнено</div>
       </div>
-      <div class="progress-text">{{ progress }}% выполнено</div>
 
       <!-- Кнопка добавления подзадачи -->
-      <button class="add-subtask-button" @click="addSubtask">Добавить подзадачу</button>
+      <button @click="addSubtask" class="add-subtask-button">
+        + Добавить подзадачу
+      </button>
 
       <!-- Список подзадач -->
       <div class="subtasks">
@@ -37,19 +52,28 @@
             v-model="subtask.completed"
             @change="updateProgress"
           />
-          <input
-            v-model="subtask.name"
-            placeholder="Введите название подзадачи"
-            :class="{ completed: subtask.completed }"
-          />
-          <!-- Кнопка удаления подзадачи (справа) -->
+          <div
+            class="subtask-title"
+            @dblclick="startEditingSubtask(index)"
+          >
+            <template v-if="!subtask.editing">
+              {{ subtask.name }}
+            </template>
+            <input
+              v-else
+              v-model="subtask.name"
+              @blur="stopEditingSubtask(index)"
+              @keyup.enter="stopEditingSubtask(index)"
+              class="subtask-input"
+            />
+          </div>
           <button @click="deleteSubtask(index)" class="delete-subtask-button">
-            Удалить
+            ×
           </button>
         </div>
       </div>
 
-      <!-- Кнопки Save и Close -->
+      <!-- Кнопки управления -->
       <div class="actions">
         <button @click="saveTask" class="save-button">Сохранить</button>
         <button @click="closeModal" class="close-button">Закрыть</button>
@@ -59,62 +83,73 @@
 </template>
 
 <script>
+import { reactive } from 'vue';
+
 export default {
   props: {
     task: Object,
   },
   data() {
     return {
-      progress: 0, // Прогресс выполнения подзадач
+      isEditingTitle: false,
+      // Используем реактивную обертку для подзадач
+      localTask: reactive({ ...this.task })
     };
   },
-  watch: {
-    // Следим за изменениями подзадач и обновляем прогресс
-    'task.subtasks': {
-      handler() {
-        this.updateProgress();
-      },
-      deep: true,
+  computed: {
+    progress() {
+      if (!this.hasSubtasks) return 0;
+      const completed = this.localTask.subtasks.filter(s => s.completed).length;
+      return Math.round((completed / this.localTask.subtasks.length) * 100);
     },
+    hasSubtasks() {
+      return this.localTask.subtasks && this.localTask.subtasks.length > 0;
+    }
   },
   methods: {
-    // Закрытие модального окна
-    closeModal() {
-      this.$emit('close');
+    startEditingTitle() {
+      this.isEditingTitle = true;
+      this.$nextTick(() => {
+        this.$refs.titleInput.focus();
+      });
     },
-
-    // Сохранение задачи
-    saveTask() {
-      this.$emit('saveTask', this.task);
+    stopEditingTitle() {
+      this.isEditingTitle = false;
     },
-
-    // Добавление подзадачи
+    startEditingSubtask(index) {
+      // Прямое изменение свойства с реактивным обновлением
+      this.localTask.subtasks[index].editing = true;
+      this.$nextTick(() => {
+        const inputs = this.$el.querySelectorAll('.subtask-input');
+        if (inputs[index]) inputs[index].focus();
+      });
+    },
+    stopEditingSubtask(index) {
+      this.localTask.subtasks[index].editing = false;
+    },
     addSubtask() {
-      this.task.subtasks.push({ name: '', completed: false });
+      if (!this.localTask.subtasks) {
+        this.localTask.subtasks = [];
+      }
+      this.localTask.subtasks.push({
+        name: 'Новая подзадача',
+        completed: false,
+        editing: false
+      });
     },
-
-    // Удаление подзадачи
     deleteSubtask(index) {
       this.task.subtasks.splice(index, 1);
     },
-
-    // Обновление прогресса выполнения подзадач
     updateProgress() {
-      const totalSubtasks = this.task.subtasks.length;
-      if (totalSubtasks === 0) {
-        this.progress = 0;
-        return;
-      }
-      const completedSubtasks = this.task.subtasks.filter(
-        (subtask) => subtask.completed
-      ).length;
-      this.progress = Math.round((completedSubtasks / totalSubtasks) * 100);
+      // Обновление прогресса происходит автоматически через computed свойство
     },
-  },
-  mounted() {
-    // При открытии модального окна обновляем прогресс
-    this.updateProgress();
-  },
+    closeModal() {
+      this.$emit('close');
+    },
+    saveTask() {
+      this.$emit('saveTask', this.task);
+    }
+  }
 };
 </script>
 
@@ -134,47 +169,98 @@ export default {
 .modal-content {
   background: white;
   padding: 20px;
-  border-radius: 5px;
-  width: 400px;
+  border-radius: 8px;
+  width: 500px;
   max-width: 90%;
 }
 
-h2 {
-  margin-top: 0;
+.task-header {
   margin-bottom: 20px;
+}
+
+.task-title {
   font-size: 1.5em;
-}
-
-.form-group {
-  margin-bottom: 15px;
-}
-
-label {
-  display: block;
-  margin-bottom: 5px;
   font-weight: bold;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 4px;
 }
 
-input[type="text"],
-textarea {
+.task-title:hover {
+  background: #f0f0f0;
+}
+
+.task-title-input {
+  font-size: 1.5em;
+  font-weight: bold;
   width: 100%;
   padding: 8px;
-  border: 1px solid #ccc;
+  border: 2px solid #0079bf;
   border-radius: 4px;
-  font-size: 1em;
+  margin-bottom: 15px;
+  margin-right: 40px;
 }
 
-textarea {
-  resize: vertical;
+.description-input {
+  width: 100%;
   min-height: 100px;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-bottom: 15px;
+  margin-right: 40px;
+}
+
+.add-subtask-button {
+  width: 100%;
+  padding: 8px;
+  background: #f0f0f0;
+  border: none;
+  border-radius: 4px;
+  margin-bottom: 15px;
+  cursor: pointer;
+}
+
+.subtasks {
+  margin: 15px 0;
+}
+
+.subtask {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  gap: 8px;
+}
+
+.subtask-title {
+  flex: 1;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.subtask-input {
+  flex: 1;
+  padding: 4px;
+  border: 1px solid #ddd;
+}
+
+.delete-subtask-button {
+  background: #ff6b6b;
+  border: none;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.progress-container {
+  margin: 15px 0;
 }
 
 .progress-bar {
-  width: 100%;
-  height: 10px;
-  background: #e0e0e0;
-  border-radius: 5px;
-  margin-bottom: 10px;
+  height: 8px;
+  background: #eee;
+  border-radius: 4px;
   overflow: hidden;
 }
 
@@ -186,95 +272,32 @@ textarea {
 
 .progress-text {
   text-align: center;
-  margin-bottom: 15px;
   font-size: 0.9em;
-  color: #555;
-}
-
-.add-subtask-button {
-  width: 100%;
-  padding: 10px;
-  background: #f0f0f0;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  cursor: pointer;
-  margin-bottom: 15px;
-}
-
-.add-subtask-button:hover {
-  background: #e0e0e0;
-}
-
-.subtasks {
-  margin-bottom: 15px;
-}
-
-.subtask {
-  display: flex;
-  align-items: center;
-  margin-bottom: 10px;
-  gap: 10px; /* Расстояние между элементами */
-}
-
-.subtask input[type="checkbox"] {
-  margin-right: 10px;
-}
-
-.subtask input[type="text"] {
-  flex: 1; /* Занимает всё доступное пространство */
-  padding: 5px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-}
-
-.subtask input[type="text"].completed {
-  text-decoration: line-through;
-  color: #888;
-}
-
-.delete-subtask-button {
-  background: #ff6b6b;
-  border: none;
-  color: white;
-  padding: 5px 10px;
-  border-radius: 4px;
-  cursor: pointer;
-  margin-left: auto; /* Кнопка удаления сдвигается вправо */
-}
-
-.delete-subtask-button:hover {
-  background: #ff4c4c;
+  color: #666;
+  margin-top: 5px;
 }
 
 .actions {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-}
-
-.save-button,
-.close-button {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
+  margin-top: 20px;
 }
 
 .save-button {
   background: #76c7c0;
+  border: none;
   color: white;
-}
-
-.save-button:hover {
-  background: #5aa8a1;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
 }
 
 .close-button {
   background: #f0f0f0;
   border: 1px solid #ccc;
-}
-
-.close-button:hover {
-  background: #e0e0e0;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
 }
 </style>

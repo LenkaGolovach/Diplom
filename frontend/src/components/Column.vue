@@ -30,10 +30,14 @@
       group="tasks"
       class="tasks"
       item-key="id"
-      @change="onTaskChange" <!-- Добавляем обработчик изменения -->
+      @change="onTaskChange"
     >
       <template #item="{ element }">
-        <Task :task="element" @click="$emit('openTaskModal', element)" />
+        <Task 
+          :task="element" 
+          @click="$emit('openTaskModal', element)"
+          @delete="$emit('deleteTask', element)"
+        />
       </template>
     </draggable>
 
@@ -64,12 +68,6 @@ export default {
       isEditing: false,
     };
   },
-  watch: {
-    // Следим за изменениями задач и обновляем родительский компонент
-    tasks(newTasks) {
-      this.$emit('update-tasks', newTasks);
-    },
-  },
   methods: {
     startEditing() {
       this.isEditing = true;
@@ -87,8 +85,10 @@ export default {
     deleteColumn() {
       this.$emit('delete-column');
     },
+    deleteTask(task) {
+      this.$emit('delete-task', task); 
+    },
     onTaskChange() {
-      // При изменении задач (перетаскивании) обновляем родительский компонент
       this.$emit('update-tasks', this.tasks);
     },
   },

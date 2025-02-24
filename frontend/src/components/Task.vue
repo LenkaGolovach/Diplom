@@ -2,13 +2,15 @@
   <div class="task" @click="$emit('click', task)">
     <div class="task-header">
       <span>{{ task.name }}</span>
-      <button @click.stop="$emit('delete')">Удалить</button>
+      <button @click.stop="$emit('delete')">×</button>
     </div>
-    <!-- Прогресс-бар -->
-    <div class="progress-bar">
+    <!-- Прогресс-бар (только если есть подзадачи) -->
+    <div v-if="task.subtasks && task.subtasks.length > 0" class="progress-bar">
       <div class="progress" :style="{ width: progress + '%' }"></div>
     </div>
-    <div class="progress-text">{{ progress }}% выполнено</div>
+    <div v-if="task.subtasks && task.subtasks.length > 0" class="progress-text">
+      {{ progress }}% выполнено
+    </div>
   </div>
 </template>
 
@@ -18,19 +20,10 @@ export default {
     task: Object,
   },
   computed: {
-    // Вычисляем прогресс выполнения подзадач
     progress() {
-      const totalSubtasks = this.task.subtasks.length;
-      if (totalSubtasks === 0) return 0;
-      const completedSubtasks = this.task.subtasks.filter(
-        (subtask) => subtask.completed
-      ).length;
-      return Math.round((completedSubtasks / totalSubtasks) * 100);
-    },
-  },
-  methods: {
-    deleteTask() {
-      this.$emit('delete');
+      if (!this.task.subtasks || this.task.subtasks.length === 0) return 0;
+      const completed = this.task.subtasks.filter(s => s.completed).length;
+      return Math.round((completed / this.task.subtasks.length) * 100);
     },
   },
 };
