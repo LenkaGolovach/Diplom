@@ -2,7 +2,7 @@
   <div class="task" @click="$emit('click', task)">
     <div class="task-header">
       <span>{{ task.name }}</span>
-      <button @click.stop="$emit('delete')">×</button>
+      <button @click.stop="$emit('delete', task)">×</button>
     </div>
     <!-- Прогресс-бар (только если есть подзадачи) -->
     <div v-if="task.subtasks && task.subtasks.length > 0" class="progress-bar">

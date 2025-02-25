@@ -36,7 +36,7 @@
         <Task 
           :task="element" 
           @click="$emit('openTaskModal', element)"
-          @delete="$emit('deleteTask', element)"
+          @delete="deleteTask(element)"
         />
       </template>
     </draggable>
@@ -86,7 +86,11 @@ export default {
       this.$emit('delete-column');
     },
     deleteTask(task) {
-      this.$emit('delete-task', task); 
+      const index = this.tasks.indexOf(task);
+      if (index !== -1) {
+        this.tasks.splice(index, 1);
+        this.$emit('update-tasks', this.tasks);
+      }
     },
     onTaskChange() {
       this.$emit('update-tasks', this.tasks);

@@ -93,6 +93,7 @@
         
         <label class="file-upload">
           <input 
+            ref="fileInput"
             type="file" 
             @change="handleFileUpload" 
             multiple
@@ -182,25 +183,46 @@ export default {
       return type.startsWith('image/');
     },
     handleFileUpload(e) {
-      const files = e.target.files;
-      for (let i = 0; i < files.length; i++) {
+      const files = Array.from(e.target.files); // Конвертируем FileList в массив
+      
+      // Проверяем наличие файлов
+      if (!files || files.length === 0) return;
+
+      // Сбрасываем значение инпута
+      const resetInput = () => {
+        this.$refs.fileInput.value = '';
+      };
+
+      files.forEach((file) => { // Используем forEach вместо for-loop
         const reader = new FileReader();
+        
         reader.onload = (e) => {
-          // Инициализируем свойство files, если его нет
+          // Проверяем существование файла
+          if (!file) return;
+
+          // Инициализируем массив файлов если нужно
           if (!this.task.files) {
             this.$set(this.task, 'files', []);
           }
+
+          // Добавляем файл в массив
           this.task.files.push({
-            name: files[i].name,
-            type: files[i].type,
+            name: file.name,
+            type: file.type,
             url: e.target.result
           });
         };
-        reader.readAsDataURL(files[i]);
-      }
+
+        reader.onerror = resetInput;
+        reader.readAsDataURL(file);
+      });
+
+      resetInput();
     },
     removeFile(index) {
-      this.task.files.splice(index, 1);
+      if (this.task.files && this.task.files.length > index) {
+        this.task.files.splice(index, 1);
+      }
     },
     downloadFile(file) {
       // Создаем временную ссылку для скачивания
