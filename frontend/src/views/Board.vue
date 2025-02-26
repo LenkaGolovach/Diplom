@@ -6,12 +6,12 @@
         class="board-title"
         @dblclick="startEditingBoardName"
       >
-        {{ boardName }}
+        {{ board.name }}
       </div>
       <input
         v-else
         ref="boardNameInput"
-        v-model="boardName"
+        v-model="board.name"
         @blur="stopEditingBoardName"
         @keyup.enter="stopEditingBoardName"
         class="board-title-input"
@@ -21,8 +21,8 @@
     <div class="columns-container">
       <div class="columns">
         <Column
-          v-for="(column, index) in columns"
-          :key="column.id" 
+          v-for="(column, index) in board.columns"
+          :key="column.id"
           :column="column"
           @add-task="addTask(index)"
           @delete-column="deleteColumn(index)"
@@ -45,8 +45,9 @@
 </template>
 
 <script>
-import Column from './Column.vue';
-import TaskModal from './TaskModal.vue';
+import Column from '../components/Column.vue';
+import TaskModal from '../components/TaskModal.vue';
+import axios from 'axios';
 
 const COLORS = [
   '#61bd4f', '#f2d600', 
@@ -59,45 +60,81 @@ export default {
     Column,
     TaskModal,
   },
+  props: {
+    id: {
+      type: String,
+      required: true,
+    },
+  },
   data() {
     return {
-      boardName: 'Моя доска',
-      columns: [
-        { id: 1, name: 'Нужно сделать', tasks: [], color: COLORS[0] },
-        { id: 2, name: 'В процессе', tasks: [], color: COLORS[1] },
-        { id: 3, name: 'Готово', tasks: [], color: COLORS[2] },
-      ],
+      board: {
+        name: '',
+        columns: [],
+      },
       showModal: false,
       currentTask: {
         id: Date.now(),
         name: '',
         description: '',
         subtasks: [],
-        files: [] 
+        files: [],
       },
       currentColumnIndex: null,
       isEditingBoardName: false,
     };
   },
+  async created() {
+    await this.fetchBoardData();
+  },
   methods: {
+    async fetchBoardData() {
+      try {
+        const response = await axios.get(`/api/boards/${this.id}/`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+        });
+        this.board = response.data;
+      } catch (error) {
+        console.error('Ошибка загрузки доски:', error);
+      }
+    },
+    async saveBoard() {
+      try {
+        await axios.put(`/api/boards/${this.id}/`, this.board, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+        });
+      } catch (error) {
+        console.error('Ошибка сохранения доски:', error);
+      }
+    },
     startEditingBoardName() {
       this.isEditingBoardName = true;
       this.$nextTick(() => {
         this.$refs.boardNameInput.focus();
       });
     },
-    stopEditingBoardName() {
+    async stopEditingBoardName() {
       this.isEditingBoardName = false;
+      await this.saveBoard();
     },
-    addColumn() {
-      const color = COLORS[this.columns.length % COLORS.length];
+    async addColumn() {
+      const color = COLORS[this.board.columns.length % COLORS.length];
       const newColumn = {
-        id: Date.now(), // Уникальный ID для новой колонки
+        id: Date.now(),
         name: 'Новая колонка',
         tasks: [],
         color,
       };
-      this.columns.push(newColumn);
+      this.board.columns.push(newColumn);
+      await this.saveBoard();
+    },
+    async deleteColumn(columnIndex) {
+      this.board.columns.splice(columnIndex, 1);
+      await this.saveBoard();
     },
     addTask(columnIndex) {
       this.currentTask = {
@@ -105,23 +142,41 @@ export default {
         name: '',
         description: '',
         subtasks: [],
-        files: []
+        files: [],
       };
       this.currentColumnIndex = columnIndex;
       this.showModal = true;
     },
-    deleteTask(task) {
-    const columnIndex = this.columns.findIndex(col => col.tasks.includes(task));
-    if (columnIndex !== -1) {
-      const taskIndex = this.columns[columnIndex].tasks.indexOf(task);
-      this.columns[columnIndex].tasks.splice(taskIndex, 1);
-    }
-  },
-    deleteColumn(columnIndex) {
-      this.columns.splice(columnIndex, 1);
+    async saveTask(task) {
+      if (this.currentColumnIndex !== null) {
+        this.board.columns[this.currentColumnIndex].tasks.push(task);
+      } else {
+        const columnIndex = this.board.columns.findIndex(col =>
+          col.tasks.some(t => t.id === this.currentTask.id)
+        );
+        if (columnIndex !== -1) {
+          const taskIndex = this.board.columns[columnIndex].tasks.findIndex(
+            t => t.id === this.currentTask.id
+          );
+          this.board.columns[columnIndex].tasks.splice(taskIndex, 1, task);
+        }
+      }
+      this.closeModal();
+      await this.saveBoard();
     },
-    updateColumnTasks(columnIndex, tasks) {
-      this.columns[columnIndex].tasks = tasks;
+    async deleteTask(task) {
+      const columnIndex = this.board.columns.findIndex(col =>
+        col.tasks.some(t => t.id === task.id)
+      );
+      if (columnIndex !== -1) {
+        const taskIndex = this.board.columns[columnIndex].tasks.indexOf(task);
+        this.board.columns[columnIndex].tasks.splice(taskIndex, 1);
+        await this.saveBoard();
+      }
+    },
+    async updateColumnTasks(columnIndex, tasks) {
+      this.board.columns[columnIndex].tasks = tasks;
+      await this.saveBoard();
     },
     openModal(task) {
       this.currentTask = task;
@@ -131,18 +186,6 @@ export default {
       this.showModal = false;
       this.currentTask = null;
       this.currentColumnIndex = null;
-    },
-    saveTask(task) {
-      if (this.currentColumnIndex !== null) {
-        this.columns[this.currentColumnIndex].tasks.push(task);
-      } else {
-        const columnIndex = this.columns.findIndex(col => col.tasks.includes(this.currentTask));
-        if (columnIndex !== -1) {
-          const taskIndex = this.columns[columnIndex].tasks.indexOf(this.currentTask);
-          this.columns[columnIndex].tasks.splice(taskIndex, 1, task);
-        }
-      }
-      this.closeModal();
     },
   },
 };
