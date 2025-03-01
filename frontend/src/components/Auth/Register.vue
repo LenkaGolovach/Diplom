@@ -37,25 +37,26 @@ export default {
     };
   },
   methods: {
-  async handleRegister() {
-    try {
-      const response = await axios.post('/api/auth/register/', {
-        email: this.email,
-        password: this.password,
-      });
-      localStorage.setItem('token', response.data.token);
-      this.$router.push('/boards');
-    } catch (error) {
-      if (error.response) {
-        // Ошибка от сервера (например, 400 или 500)
-        alert(error.response.data.error || 'Ошибка регистрации');
-      } else {
-        // Ошибка сети или другая ошибка
-        alert('Ошибка сети');
+    async handleRegister() {
+      try {
+        const response = await axios.post('http://localhost:8000/api/auth/register/', {
+          email: this.email,
+          password: this.password,
+        });
+        localStorage.setItem('token', response.data.token);
+        this.$store.commit('setUser', response.data.user);
+        this.$router.push('/boards');
+      } catch (error) {
+        if (error.response) {
+          // Ошибка от сервера (например, 400 или 500)
+          alert(error.response.data.error || 'Ошибка регистрации');
+        } else {
+          // Ошибка сети или другая ошибка
+          alert('Ошибка сети');
+        }
       }
-    }
-  },
-},
+    },
+  }
 };
 </script>
 

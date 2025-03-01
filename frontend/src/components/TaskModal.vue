@@ -182,42 +182,27 @@ export default {
     isImage(type) {
       return type.startsWith('image/');
     },
-    handleFileUpload(e) {
-      const files = Array.from(e.target.files); // Конвертируем FileList в массив
-      
-      // Проверяем наличие файлов
-      if (!files || files.length === 0) return;
-
-      // Сбрасываем значение инпута
-      const resetInput = () => {
-        this.$refs.fileInput.value = '';
-      };
-
-      files.forEach((file) => { // Используем forEach вместо for-loop
-        const reader = new FileReader();
-        
-        reader.onload = (e) => {
-          // Проверяем существование файла
-          if (!file) return;
-
-          // Инициализируем массив файлов если нужно
-          if (!this.task.files) {
-            this.$set(this.task, 'files', []);
-          }
-
-          // Добавляем файл в массив
-          this.task.files.push({
-            name: file.name,
-            type: file.type,
-            url: e.target.result
-          });
-        };
-
-        reader.onerror = resetInput;
-        reader.readAsDataURL(file);
-      });
-
-      resetInput();
+    async handleFileUpload(e) {
+      const files = e.target.files;
+      for (let file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+          const response = await axios.post(
+            `/api/tasks/${this.task.id}/upload/`,
+            formData,
+            {
+              headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                'Content-Type': 'multipart/form-data'
+              }
+            }
+          );
+          this.task.files.push(response.data);
+        } catch (error) {
+          console.error('Ошибка загрузки файла:', error);
+        }
+      }
     },
     removeFile(index) {
       if (this.task.files && this.task.files.length > index) {

@@ -56,7 +56,7 @@ export default {
         );
         this.boards.push(response.data);
       } catch (error) {
-        console.error('Ошибка создания доски:', error);
+        console.error('Ошибка создания доски:', error.response.data);
       }
     },
     goToBoard(boardId) {

@@ -92,8 +92,20 @@ export default {
         this.$emit('update-tasks', this.tasks);
       }
     },
-    onTaskChange() {
-      this.$emit('update-tasks', this.tasks);
+    async onTaskChange() {
+      try {
+        await axios.put(
+          `/api/columns/${this.column.id}/tasks_order/`,
+          { tasks: this.tasks.map(t => t.id) },
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem('token')}`,
+            },
+          }
+        );
+      } catch (error) {
+        console.error('Ошибка сохранения порядка задач:', error);
+      }
     },
   },
 };
