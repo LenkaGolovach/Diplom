@@ -28,6 +28,7 @@
 
 <script>
 import { mapActions } from 'vuex';
+import axios from 'axios';
 
 export default {
   data() {
@@ -40,13 +41,48 @@ export default {
     ...mapActions(['login']),
     async handleLogin() {
       try {
-        await this.login({ email: this.email, password: this.password });
+        const response = await axios.post(
+          'http://localhost:8000/api/auth/login/',
+          {
+            email: this.email,
+            password: this.password
+          },
+          {
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        
+        // Сохраняем токен и пользователя
+        localStorage.setItem('token', response.data.access);
+        this.$store.commit('setUser', response.data.user);
         this.$router.push('/boards');
       } catch (error) {
-        alert('Ошибка авторизации');
+          console.error('Login error details:', error);
+          
+          // Добавьте проверку на существование response
+          let errorMessage = 'Произошла неизвестная ошибка';
+          
+          if (error.response) {
+              // Ошибка с ответом от сервера
+              if (error.response.status === 401) {
+                  errorMessage = 'Неверный email или пароль';
+              } else {
+                  errorMessage = `Ошибка сервера: ${error.response.status}`;
+              }
+          } else if (error.request) {
+              // Запрос был сделан, но ответ не получен
+              errorMessage = 'Сервер не отвечает';
+          } else {
+              // Ошибка в настройке запроса
+              errorMessage = 'Ошибка в отправке запроса';
+          }
+          
+          alert(errorMessage);
       }
-    },
-  },
+    }
+  }
 };
 </script>
 

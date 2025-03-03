@@ -92,20 +92,29 @@ export default {
         this.$emit('update-tasks', this.tasks);
       }
     },
-    async onTaskChange() {
-      try {
-        await axios.put(
-          `/api/columns/${this.column.id}/tasks_order/`,
-          { tasks: this.tasks.map(t => t.id) },
-          {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('token')}`,
-            },
-          }
-        );
-      } catch (error) {
-        console.error('Ошибка сохранения порядка задач:', error);
-      }
+    async onTaskChange(event) {
+        if (event.moved) {
+            const task = event.moved.element
+            try {
+                await axios.patch(
+                    `/api/tasks/${task.id}/`,
+                    {
+                        column: this.column.id,
+                        order: event.moved.newIndex
+                    },
+                    {
+                        headers: {
+                            Authorization: `Bearer ${localStorage.getItem('token')}`
+                        }
+                    }
+                )
+                this.$emit('update-tasks', this.tasks)
+            } catch (error) {
+                console.error('Ошибка перемещения задачи:', error)
+                this.tasks.splice(event.moved.newIndex, 1)
+                this.tasks.splice(event.moved.oldIndex, 0, task)
+            }
+        }
     },
   },
 };

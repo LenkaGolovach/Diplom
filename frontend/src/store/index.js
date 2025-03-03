@@ -22,9 +22,22 @@ export default createStore({
   },
   actions: {
     async login({ commit }, credentials) {
-      const response = await axios.post('/api/auth/login/', credentials)
-      commit('setToken', response.data.token)
-      commit('setUser', response.data.user)
+      try {
+          const response = await axios.post(
+              '/api/auth/login/', 
+              credentials,
+              {
+                  headers: {
+                      'Content-Type': 'application/json'
+                  }
+              }
+          );
+          commit('setUser', response.data.user);
+          commit('setToken', response.data.access); 
+          localStorage.setItem('token', response.data.access);
+      } catch (error) {
+          throw error; 
+      }
     },
     async register({ commit }, credentials) {
       const response = await axios.post('/api/auth/register/', credentials)

@@ -35,12 +35,15 @@ export default {
       try {
         const response = await axios.get('/api/boards/', {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-          },
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          }
         });
-        this.boards = response.data;
+        this.boards = response.data.results || response.data; // Обработка пагинации
       } catch (error) {
-        console.error('Ошибка загрузки досок:', error);
+        const errorMessage = error.response && error.response.data 
+          ? error.response.data 
+          : error.message;
+        console.error('Ошибка загрузки досок:', errorMessage);
       }
     },
     async createBoard() {

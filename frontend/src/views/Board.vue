@@ -26,6 +26,7 @@
           :column="column"
           @add-task="addTask(index)"
           @delete-column="deleteColumn(index)"
+          @update-column="updateColumn"
           @update-tasks="updateColumnTasks(index, $event)"
           @openTaskModal="openModal"
         />
@@ -122,28 +123,56 @@ export default {
       await this.saveBoard();
     },
     async addColumn() {
+      const color = COLORS[this.board.columns.length % COLORS.length];
+      const newColumn = {
+        name: 'Новая колонка',
+        color,
+        board: this.board.id, 
+      };
+
       try {
-        const response = await axios.post(
-          '/api/columns/',
-          {
-            board: this.board.id,
-            name: 'Новая колонка',
-            color: COLORS[this.board.columns.length % COLORS.length]
+        const response = await axios.post('/api/columns/', newColumn, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
           },
-          {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('token')}`,
-            },
-          }
-        );
+        });
         this.board.columns.push(response.data);
       } catch (error) {
-        console.error('Ошибка создания колонки:', error);
+        const errorMessage = error.response && error.response.data 
+          ? error.response.data 
+          : error.message;
+        console.error('Ошибка загрузки досок:', errorMessage);
       }
     },
     async deleteColumn(columnIndex) {
-      this.board.columns.splice(columnIndex, 1);
-      await this.saveBoard();
+      const column = this.board.columns[columnIndex];
+      try {
+        await axios.delete(`/api/columns/${column.id}/`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+        });
+        this.board.columns.splice(columnIndex, 1);
+      } catch (error) {
+        const errorMessage = error.response && error.response.data 
+          ? error.response.data 
+          : error.message;
+        console.error('Ошибка загрузки досок:', errorMessage);
+      }
+    },
+    async updateColumn(column) {
+      try {
+        await axios.put(`/api/columns/${column.id}/`, column, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+        });
+      } catch (error) {
+        const errorMessage = error.response && error.response.data 
+          ? error.response.data 
+          : error.message;
+        console.error('Ошибка загрузки досок:', errorMessage);
+      }
     },
     addTask(columnIndex) {
       this.currentTask = {
@@ -157,36 +186,21 @@ export default {
       this.showModal = true;
     },
     async saveTask(task) {
-      try {
-        const taskData = {
-          ...task,
-          column: this.board.columns[this.currentColumnIndex].id,
-          subtasks: task.subtasks.map(st => ({
-            name: st.name,
-            completed: st.completed
-          }))
-        };
-
-        if (task.id) {
-          await axios.put(`/api/tasks/${task.id}/`, taskData, {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('token')}`,
-            },
-          });
-        } else {
-          const response = await axios.post('/api/tasks/', taskData, {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('token')}`,
-            },
-          });
-          task.id = response.data.id;
+      if (this.currentColumnIndex !== null) {
+        this.board.columns[this.currentColumnIndex].tasks.push(task);
+      } else {
+        const columnIndex = this.board.columns.findIndex(col =>
+          col.tasks.some(t => t.id === this.currentTask.id)
+        );
+        if (columnIndex !== -1) {
+          const taskIndex = this.board.columns[columnIndex].tasks.findIndex(
+            t => t.id === this.currentTask.id
+          );
+          this.board.columns[columnIndex].tasks.splice(taskIndex, 1, task);
         }
-        
-        await this.fetchBoardData();
-        this.closeModal();
-      } catch (error) {
-        console.error('Ошибка сохранения задачи:', error);
       }
+      this.closeModal();
+      await this.saveBoard();
     },
     async deleteTask(task) {
       const columnIndex = this.board.columns.findIndex(col =>

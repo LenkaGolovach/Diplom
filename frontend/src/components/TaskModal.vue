@@ -176,33 +176,101 @@ export default {
     closeModal() {
       this.$emit('close');
     },
-    saveTask() {
-      this.$emit('saveTask', this.task);
+    async saveTask() {
+        const formData = new FormData()
+        
+        // Основные данные задачи
+        formData.append('name', this.task.name)
+        formData.append('description', this.task.description)
+        formData.append('column', this.task.column.id)
+
+        // Подзадачи
+        this.task.subtasks.forEach((subtask, index) => {
+            formData.append(`subtasks[${index}][name]`, subtask.name)
+            formData.append(`subtasks[${index}][completed]`, subtask.completed)
+        })
+
+        // Файлы
+        if (this.$refs.fileInput.files) {
+            Array.from(this.$refs.fileInput.files).forEach(file => {
+                formData.append('attachments', file)
+            })
+        }
+
+        try {
+            let response
+            if (this.task.id) {
+                // Обновление существующей задачи
+                response = await axios.put(
+                    `/api/tasks/${this.task.id}/`,
+                    formData,
+                    {
+                        headers: {
+                            'Content-Type': 'multipart/form-data',
+                            Authorization: `Bearer ${localStorage.getItem('token')}`
+                        }
+                    }
+                )
+            } else {
+                // Создание новой задачи
+                response = await axios.post(
+                    '/api/tasks/',
+                    formData,
+                    {
+                        headers: {
+                            'Content-Type': 'multipart/form-data',
+                            Authorization: `Bearer ${localStorage.getItem('token')}`
+                        }
+                    }
+                )
+            }
+            
+            this.$emit('saveTask', response.data)
+            this.closeModal()
+        } catch (error) {
+            console.error('Ошибка сохранения задачи:', error)
+            alert('Ошибка сохранения задачи')
+        }
     },
     isImage(type) {
       return type.startsWith('image/');
     },
-    async handleFileUpload(e) {
-      const files = e.target.files;
-      for (let file of files) {
-        const formData = new FormData();
-        formData.append('file', file);
-        try {
-          const response = await axios.post(
-            `/api/tasks/${this.task.id}/upload/`,
-            formData,
-            {
-              headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`,
-                'Content-Type': 'multipart/form-data'
-              }
-            }
-          );
-          this.task.files.push(response.data);
-        } catch (error) {
-          console.error('Ошибка загрузки файла:', error);
-        }
-      }
+    handleFileUpload(e) {
+      const files = Array.from(e.target.files); // Конвертируем FileList в массив
+      
+      // Проверяем наличие файлов
+      if (!files || files.length === 0) return;
+
+      // Сбрасываем значение инпута
+      const resetInput = () => {
+        this.$refs.fileInput.value = '';
+      };
+
+      files.forEach((file) => { // Используем forEach вместо for-loop
+        const reader = new FileReader();
+        
+        reader.onload = (e) => {
+          // Проверяем существование файла
+          if (!file) return;
+
+          // Инициализируем массив файлов если нужно
+          if (!this.task.files) {
+            this.$set(this.task, 'files', []);
+          }
+
+          // Добавляем файл в массив
+          this.task.files.push({
+            name: file.name,
+            type: file.type,
+            url: e.target.result
+          });
+        };
+
+        reader.onerror = resetInput;
+        reader.readAsDataURL(file);
+      });
+
+      resetInput();
     },
     removeFile(index) {
       if (this.task.files && this.task.files.length > index) {

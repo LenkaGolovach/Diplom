@@ -9,6 +9,7 @@ app.use(router)
 app.use(store) 
 
 axios.defaults.baseURL = 'http://localhost:8000' 
+axios.defaults.withCredentials = true;
 axios.interceptors.request.use(config => {
   const token = localStorage.getItem('token') // Получаем токен напрямую из localStorage
   if (token) {

@@ -8,19 +8,25 @@ from .models import Board, Column, Task
 from .serializers import BoardSerializer, ColumnSerializer, TaskSerializer
 from .models import CustomUser 
 import logging
+from django.contrib.auth import get_user_model
 from rest_framework.decorators import action
+from rest_framework.parsers import MultiPartParser, JSONParser
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 
 logger = logging.getLogger(__name__) 
 
 # ViewSet для досок
 class BoardViewSet(viewsets.ModelViewSet):
     serializer_class = BoardSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         return Board.objects.filter(owner=self.request.user)
 
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
+        board = serializer.save(owner=self.request.user)
+        board.create_default_columns()
 
 # ViewSet для колонок
 class ColumnViewSet(viewsets.ModelViewSet):
@@ -30,13 +36,34 @@ class ColumnViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return Column.objects.filter(board__owner=self.request.user)
 
+    def perform_create(self, serializer):
+        # Автоматически связываем колонку с доской
+        board_id = self.request.data.get('board')
+        if board_id:
+            serializer.save(board_id=board_id)
+        else:
+            serializer.save()
+
 # ViewSet для задач
 class TaskViewSet(viewsets.ModelViewSet):
     serializer_class = TaskSerializer
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = (MultiPartParser, JSONParser)
 
     def get_queryset(self):
         return Task.objects.filter(column__board__owner=self.request.user)
+    
+    def perform_create(self, serializer):
+        # Обрабатываем файлы отдельно
+        files = self.request.FILES.getlist('attachments')
+        task = serializer.save()
+        
+        for file in files:
+            FileAttachment.objects.create(
+                task=task,
+                file=file,
+                name=file.name
+            )
 
 # Аутентификация
 class LoginView(APIView):
@@ -45,17 +72,25 @@ class LoginView(APIView):
     def post(self, request):
         email = request.data.get('email')
         password = request.data.get('password')
-        user = authenticate(email=email, password=password)
+        
+        user = authenticate(request, email=email, password=password)  # Используем стандартную аутентификацию
+        
         if user:
             refresh = RefreshToken.for_user(user)
             return Response({
-                'user': {
-                    'id': user.id,
-                    'email': user.email,
+                "user": {
+                    "id": user.id,
+                    "email": user.email,
                 },
-                'token': str(refresh.access_token),
-            })
-        return Response({'error': 'Invalid credentials'}, status=400)
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+            }, status=status.HTTP_200_OK)
+            
+        return Response(
+            {"error": "Invalid credentials"}, 
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+
 
 # Регистрация
 class RegisterView(APIView):
@@ -85,22 +120,8 @@ class RegisterView(APIView):
                     'email': user.email,
                 },
                 'token': str(refresh.access_token),
-            })
+            }, status=201)
         except Exception as e:
             logger.error(f'Error during registration: {str(e)}')  # Логируем исключение
             return Response({'error': 'Internal server error'}, status=500)
 
-class FileUploadView(APIView):
-    parser_classes = [MultiPartParser, FormParser]
-
-    def post(self, request, task_id):
-        task = get_object_or_404(Task, id=task_id)
-        file = request.FILES.get('file')
-        if file:
-            attachment = FileAttachment.objects.create(
-                task=task,
-                file=file,
-                name=file.name
-            )
-            return Response(FileAttachmentSerializer(attachment).data)
-        return Response({'error': 'No file provided'}, status=400)

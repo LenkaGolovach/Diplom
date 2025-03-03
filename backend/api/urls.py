@@ -6,7 +6,6 @@ from .views import (
     TaskViewSet,
     LoginView,
     RegisterView,
-    ColumnTasksUpdate,
 )
 
 router = DefaultRouter()
@@ -18,6 +17,4 @@ urlpatterns = [
     path('', include(router.urls)),
     path('auth/login/', LoginView.as_view(), name='login'),
     path('auth/register/', RegisterView.as_view(), name='register'),
-    path('columns/<int:pk>/tasks/', ColumnTasksUpdate.as_view(), name='column-tasks'),
-    path('tasks/<int:task_id>/upload/', FileUploadView.as_view(), name='file-upload'),
 ]

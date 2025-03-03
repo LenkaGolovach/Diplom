@@ -7,6 +7,7 @@ class CustomUserManager(BaseUserManager):
         if not email:
             raise ValueError('The Email field must be set')
         email = self.normalize_email(email)
+        extra_fields.setdefault('is_active', True)
         user = self.model(email=email, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
@@ -69,8 +70,12 @@ class Task(models.Model):
     column = models.ForeignKey(Column, related_name='tasks', on_delete=models.CASCADE)
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
+    order = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['order']
 
     def __str__(self):
         return f"{self.column.name} - {self.name}"
@@ -82,9 +87,14 @@ class SubTask(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def __str__(self):
+        return f"{self.task.name} - {self.name}"
+
 class FileAttachment(models.Model):
-    task = models.ForeignKey(Task, related_name='files', on_delete=models.CASCADE)
+    task = models.ForeignKey(Task, related_name='attachments', on_delete=models.CASCADE)
     file = models.FileField(upload_to='attachments/')
     name = models.CharField(max_length=255)
     uploaded_at = models.DateTimeField(auto_now_add=True)
-    
+
+    def __str__(self):
+        return self.name
