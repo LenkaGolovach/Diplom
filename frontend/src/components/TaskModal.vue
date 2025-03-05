@@ -114,6 +114,7 @@
 
 <script>
 import { reactive } from 'vue';
+import axios from 'axios';
 
 export default {
   props: {
@@ -177,60 +178,56 @@ export default {
       this.$emit('close');
     },
     async saveTask() {
-        const formData = new FormData()
+      try {
+        const columnId = this.task.column instanceof Object 
+          ? this.task.column.id 
+          : this.task.column;
+
+        if (!columnId) {
+          throw new Error('Колонка не выбрана');
+        }
+
+        const formData = new FormData();
+        formData.append('name', this.task.name);
+        formData.append('description', this.task.description || '');
+        formData.append('column', columnId);
+
+        // Добавляем подзадачи как JSON
+        if (this.task.subtasks) {
+          formData.append('subtasks', JSON.stringify(this.task.subtasks));
+        }
         
-        // Основные данные задачи
-        formData.append('name', this.task.name)
-        formData.append('description', this.task.description)
-        formData.append('column', this.task.column.id)
-
-        // Подзадачи
-        this.task.subtasks.forEach((subtask, index) => {
-            formData.append(`subtasks[${index}][name]`, subtask.name)
-            formData.append(`subtasks[${index}][completed]`, subtask.completed)
-        })
-
-        // Файлы
+        // Добавляем файлы
         if (this.$refs.fileInput.files) {
-            Array.from(this.$refs.fileInput.files).forEach(file => {
-                formData.append('attachments', file)
-            })
+          Array.from(this.$refs.fileInput.files).forEach(file => {
+            formData.append('attachments', file);
+          });
         }
 
-        try {
-            let response
-            if (this.task.id) {
-                // Обновление существующей задачи
-                response = await axios.put(
-                    `/api/tasks/${this.task.id}/`,
-                    formData,
-                    {
-                        headers: {
-                            'Content-Type': 'multipart/form-data',
-                            Authorization: `Bearer ${localStorage.getItem('token')}`
-                        }
-                    }
-                )
-            } else {
-                // Создание новой задачи
-                response = await axios.post(
-                    '/api/tasks/',
-                    formData,
-                    {
-                        headers: {
-                            'Content-Type': 'multipart/form-data',
-                            Authorization: `Bearer ${localStorage.getItem('token')}`
-                        }
-                    }
-                )
-            }
-            
-            this.$emit('saveTask', response.data)
-            this.closeModal()
-        } catch (error) {
-            console.error('Ошибка сохранения задачи:', error)
-            alert('Ошибка сохранения задачи')
+        let url = '/api/tasks/';
+        let method = 'post';
+        
+        if (this.task.id) {
+          url = `/api/tasks/${this.task.id}/`;
+          method = 'put';
         }
+
+        const response = await axios({
+          method,
+          url,
+          data: formData,
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+
+        this.$emit('saveTask', response.data);
+        this.closeModal();
+      } catch (error) {
+        console.error('Ошибка сохранения задачи:', (error.response && error.response.data) || error.message);
+        alert(`Ошибка: ${(error.response && error.response.data && error.response.data.detail) || error.message}`);
+      }
     },
     isImage(type) {
       return type.startsWith('image/');
@@ -255,7 +252,7 @@ export default {
 
           // Инициализируем массив файлов если нужно
           if (!this.task.files) {
-            this.$set(this.task, 'files', []);
+            this.task.files = [];
           }
 
           // Добавляем файл в массив

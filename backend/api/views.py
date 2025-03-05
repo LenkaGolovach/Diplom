@@ -51,19 +51,12 @@ class TaskViewSet(viewsets.ModelViewSet):
     parser_classes = (MultiPartParser, JSONParser)
 
     def get_queryset(self):
-        return Task.objects.filter(column__board__owner=self.request.user)
-    
-    def perform_create(self, serializer):
-        # Обрабатываем файлы отдельно
-        files = self.request.FILES.getlist('attachments')
-        task = serializer.save()
-        
-        for file in files:
-            FileAttachment.objects.create(
-                task=task,
-                file=file,
-                name=file.name
-            )
+        return Task.objects.filter(column__board__owner=self.request.user).prefetch_related('subtasks', 'attachments')
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
 
 # Аутентификация
 class LoginView(APIView):

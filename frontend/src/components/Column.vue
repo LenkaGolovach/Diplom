@@ -50,6 +50,7 @@
 <script>
 import Task from './Task.vue';
 import draggable from 'vuedraggable';
+import axios from 'axios';
 
 export default {
   components: {
@@ -85,36 +86,44 @@ export default {
     deleteColumn() {
       this.$emit('delete-column');
     },
-    deleteTask(task) {
-      const index = this.tasks.indexOf(task);
-      if (index !== -1) {
-        this.tasks.splice(index, 1);
-        this.$emit('update-tasks', this.tasks);
+    async deleteTask(task) {
+      try {
+        await axios.delete(`/api/tasks/${task.id}/`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+        });
+        
+        // Удаляем задачу из локального состояния
+        const index = this.tasks.findIndex(t => t.id === task.id);
+        if (index !== -1) {
+          this.tasks.splice(index, 1);
+        }
+      } catch (error) {
+        console.error('Ошибка удаления:', error);
       }
     },
     async onTaskChange(event) {
-        if (event.moved) {
-            const task = event.moved.element
-            try {
-                await axios.patch(
-                    `/api/tasks/${task.id}/`,
-                    {
-                        column: this.column.id,
-                        order: event.moved.newIndex
-                    },
-                    {
-                        headers: {
-                            Authorization: `Bearer ${localStorage.getItem('token')}`
-                        }
-                    }
-                )
-                this.$emit('update-tasks', this.tasks)
-            } catch (error) {
-                console.error('Ошибка перемещения задачи:', error)
-                this.tasks.splice(event.moved.newIndex, 1)
-                this.tasks.splice(event.moved.oldIndex, 0, task)
+      if (event.moved) {
+        const task = event.moved.element;
+        try {
+          await axios.patch(`/api/tasks/${task.id}/`, {
+            column: this.column.id,
+            order: event.moved.newIndex
+          }, {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem('token')}`
             }
+          });
+          this.$emit('update-tasks', this.tasks);
+          this.$forceUpdate();
+        } catch (error) {
+          console.error('Ошибка перемещения:', error);
+          // Откат изменений
+          this.tasks.splice(event.moved.newIndex, 1);
+          this.tasks.splice(event.moved.oldIndex, 0, task);
         }
+      }
     },
   },
 };

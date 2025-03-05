@@ -49,6 +49,8 @@
 import Column from '../components/Column.vue';
 import TaskModal from '../components/TaskModal.vue';
 import axios from 'axios';
+import { reactive } from 'vue';
+import Vue from 'vue';
 
 const COLORS = [
   '#61bd4f', '#f2d600', 
@@ -69,13 +71,13 @@ export default {
   },
   data() {
     return {
-      board: {
+      board: reactive({
         name: '',
         columns: [],
-      },
+      }),
       showModal: false,
       currentTask: {
-        id: Date.now(),
+        id: null,
         name: '',
         description: '',
         subtasks: [],
@@ -95,8 +97,23 @@ export default {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('token')}`,
           },
+          params: {
+            include_tasks: true // Добавляем параметр для включения задач
+          }
         });
-        this.board = response.data;
+        // Гарантируем наличие массива columns
+        this.board = {
+          ...response.data,
+          columns: response.data.columns.map(column => ({
+            ...column,
+            tasks: column.tasks || [] // Гарантируем наличие массива задач
+          }))
+        };
+        
+        // Инициализируем задачи для каждой колонки
+        this.board.columns.forEach(col => {
+          col.tasks = col.tasks || [];
+        });
       } catch (error) {
         console.error('Ошибка загрузки доски:', error);
       }
@@ -176,31 +193,53 @@ export default {
     },
     addTask(columnIndex) {
       this.currentTask = {
-        id: Date.now(),
         name: '',
         description: '',
         subtasks: [],
         files: [],
+        column: this.board.columns[columnIndex].id, 
       };
       this.currentColumnIndex = columnIndex;
       this.showModal = true;
     },
-    async saveTask(task) {
-      if (this.currentColumnIndex !== null) {
-        this.board.columns[this.currentColumnIndex].tasks.push(task);
-      } else {
-        const columnIndex = this.board.columns.findIndex(col =>
-          col.tasks.some(t => t.id === this.currentTask.id)
-        );
-        if (columnIndex !== -1) {
-          const taskIndex = this.board.columns[columnIndex].tasks.findIndex(
-            t => t.id === this.currentTask.id
-          );
-          this.board.columns[columnIndex].tasks.splice(taskIndex, 1, task);
+    async saveTask(savedTask) {
+      // Находим колонку по ID
+      const columnIndex = this.board.columns.findIndex(col => col.id === savedTask.column);
+
+      if (columnIndex !== -1) {
+        // Обновляем или добавляем задачу
+        const taskIndex = this.board.columns[columnIndex].tasks.findIndex(t => t.id === savedTask.id);
+        
+        if (taskIndex !== -1) {
+          this.board.columns[columnIndex].tasks.splice(taskIndex, 1, savedTask);
+        } else {
+          this.board.columns[columnIndex].tasks.push(savedTask);
+        }
+
+        // Удаляем некорректный PATCH-запрос для колонки
+        // Вместо этого обновляем задачу через API
+        try {
+          if (savedTask.id) {
+            await axios.patch(`/api/tasks/${savedTask.id}/`, savedTask, {
+              headers: {
+                Authorization: `Bearer ${localStorage.getItem('token')}`
+              }
+            });
+          } else {
+            const response = await axios.post('/api/tasks/', savedTask, {
+              headers: {
+                Authorization: `Bearer ${localStorage.getItem('token')}`
+              }
+            });
+            // Обновляем ID созданной задачи
+            savedTask.id = response.data.id;
+          }
+        } catch (error) {
+          console.error('Ошибка сохранения задачи:', error);
         }
       }
+
       this.closeModal();
-      await this.saveBoard();
     },
     async deleteTask(task) {
       const columnIndex = this.board.columns.findIndex(col =>
@@ -217,12 +256,18 @@ export default {
       await this.saveBoard();
     },
     openModal(task) {
-      this.currentTask = task;
+      this.currentTask = { ...task };
       this.showModal = true;
     },
     closeModal() {
       this.showModal = false;
-      this.currentTask = null;
+      this.currentTask = {
+        id: null,
+        name: '',
+        description: '',
+        subtasks: [],
+        files: [],
+      };
       this.currentColumnIndex = null;
     },
   },

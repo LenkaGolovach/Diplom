@@ -2,9 +2,11 @@ from rest_framework import serializers
 from .models import Board, Column, Task, SubTask, FileAttachment
 
 class SubTaskSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(required=False)
+    
     class Meta:
         model = SubTask
-        fields = ['id', 'name', 'completed', 'created_at', 'updated_at']
+        fields = ['id', 'name', 'completed']
 
 class FileAttachmentSerializer(serializers.ModelSerializer):
     class Meta:
@@ -23,7 +25,7 @@ class FileAttachmentSerializer(serializers.ModelSerializer):
 
 class TaskSerializer(serializers.ModelSerializer):
     subtasks = SubTaskSerializer(many=True, required=False)
-    attachments = FileAttachmentSerializer(many=True, required=False, read_only=True)
+    attachments = FileAttachmentSerializer(many=True, read_only=True)  # Только для чтения
 
     class Meta:
         model = Task
@@ -31,38 +33,64 @@ class TaskSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at', 'updated_at']
 
     def create(self, validated_data):
-        # Автоматически устанавливаем порядок
-        validated_data['order'] = Task.objects.filter(
-            column=validated_data['column']
-        ).count()
-        
         subtasks_data = validated_data.pop('subtasks', [])
-        task = Task.objects.create(**validated_data)
+        task = super().create(validated_data)
         
         # Создаем подзадачи
         for subtask_data in subtasks_data:
             SubTask.objects.create(task=task, **subtask_data)
-            
+        
+        # Обработка файлов
+        if 'request' in self.context:
+            files = self.context['request'].FILES.getlist('attachments')
+            for file in files:
+                FileAttachment.objects.create(
+                    task=task,
+                    file=file,
+                    name=file.name
+                )
         return task
 
     def update(self, instance, validated_data):
         subtasks_data = validated_data.pop('subtasks', [])
-        
-        # Обновляем основную задачу
         instance = super().update(instance, validated_data)
         
-        # Обновляем подзадачи
-        instance.subtasks.all().delete()
+        # Обновление подзадач
+        existing_subtasks = {s.id: s for s in instance.subtasks.all()}
+        
+        # Обновляем или создаем подзадачи
         for subtask_data in subtasks_data:
-            SubTask.objects.create(task=instance, **subtask_data)
-            
+            subtask_id = subtask_data.get('id')
+            if subtask_id and subtask_id in existing_subtasks:
+                subtask = existing_subtasks[subtask_id]
+                subtask.name = subtask_data.get('name', subtask.name)
+                subtask.completed = subtask_data.get('completed', subtask.completed)
+                subtask.save()
+                del existing_subtasks[subtask_id]
+            else:
+                SubTask.objects.create(task=instance, **subtask_data)
+        
+        # Удаляем оставшиеся подзадачи
+        for subtask in existing_subtasks.values():
+            subtask.delete()
+        
+        # Добавляем новые файлы
+        if 'request' in self.context:
+            files = self.context['request'].FILES.getlist('attachments')
+            for file in files:
+                FileAttachment.objects.create(
+                    task=instance,
+                    file=file,
+                    name=file.name
+                )
         return instance
-
+        
 class ColumnSerializer(serializers.ModelSerializer):
-    
+    tasks = TaskSerializer(many=True, read_only=True)
+
     class Meta:
         model = Column
-        fields = ['id', 'name', 'color', 'board', 'created_at', 'updated_at']
+        fields = ['id', 'name', 'color', 'board', 'tasks', 'created_at', 'updated_at']
         read_only_fields = ['created_at', 'updated_at']
 
 class BoardSerializer(serializers.ModelSerializer):

@@ -14,10 +14,10 @@ export default createStore({
       state.token = token
       localStorage.setItem('token', token)
     },
-    logout(state) {
-      state.user = null
-      state.token = null
-      localStorage.removeItem('token')
+    logout() {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      delete axios.defaults.headers.common['Authorization'];
     }
   },
   actions: {
