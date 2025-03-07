@@ -12,20 +12,20 @@
       {{ progress }}% выполнено
     </div>
     <div class="file-previews">
-        <div 
-          v-for="(file, index) in visibleFiles" 
-          :key="index" 
-          class="file-preview-badge"
-          :class="{ 'image-preview': isImage(file.type) }"
-          @click="downloadFile(file)"
-        >
-          <img v-if="!isImage(file.type)" src="/icons/file-icon.png" alt="Document Icon" class="file-icon-img">
-          <img v-else :src="file.url" alt="Preview">
-        </div>
-        <div v-if="hiddenFilesCount > 0" class="more-files">
-          +{{ hiddenFilesCount }}
-        </div>
+      <div 
+        v-for="(attachment, index) in visibleAttachments" 
+        :key="index" 
+        class="file-preview-badge"
+        :class="{ 'image-preview': isImage(attachment.file) }"
+        @click.stop="downloadFile(attachment)"
+      >
+        <img v-if="!isImage(attachment.file)" src="/icons/file-icon.png" alt="Document Icon" class="file-icon-img">
+        <img v-else :src="attachment.url" alt="Preview">
       </div>
+      <div v-if="hiddenAttachmentsCount > 0" class="more-files">
+        +{{ hiddenAttachmentsCount }}
+      </div>
+    </div>
   </div>
 </template>
 
@@ -40,25 +40,34 @@ export default {
       const completed = this.task.subtasks.filter(s => s.completed).length;
       return Math.round((completed / this.task.subtasks.length) * 100);
     },
-    visibleFiles() {
-      return (this.task.files && this.task.files.slice(0, 3)) || [];
+    visibleAttachments() {
+      return (this.task.attachments && this.task.attachments.slice(0, 3)) || [];
     },
-    hiddenFilesCount() {
-      return Math.max((this.task.files && this.task.files.length || 0) - 3, 0);
+    hiddenAttachmentsCount() {
+      return Math.max((this.task.attachments && this.task.attachments.length || 0) - 3, 0);
     },
     isImage() {
-      return type => type && type.startsWith('image/');
+      return filePath => filePath && (
+        filePath.endsWith('.jpg') || 
+        filePath.endsWith('.jpeg') || 
+        filePath.endsWith('.png') || 
+        filePath.endsWith('.gif') || 
+        filePath.endsWith('.svg')
+      );
     },
   },
   methods: {
-    downloadFile(file) {
+    downloadFile(attachment) {
+      // Предотвращаем всплытие события клика
+      event.stopPropagation();
+      
       // Создаем временную ссылку для скачивания
       const link = document.createElement('a');
-      link.href = file.url;
-      link.download = file.name; // Имя файла при скачивании
+      link.href = attachment.url || attachment.file;
+      link.download = attachment.name;
       document.body.appendChild(link);
-      link.click(); // Инициируем скачивание
-      document.body.removeChild(link); // Удаляем ссылку после скачивания
+      link.click();
+      document.body.removeChild(link);
     }
   }
 };

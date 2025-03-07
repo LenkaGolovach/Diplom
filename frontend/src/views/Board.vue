@@ -203,43 +203,26 @@ export default {
       this.showModal = true;
     },
     async saveTask(savedTask) {
-      // Находим колонку по ID
-      const columnIndex = this.board.columns.findIndex(col => col.id === savedTask.column);
-
-      if (columnIndex !== -1) {
-        // Обновляем или добавляем задачу
-        const taskIndex = this.board.columns[columnIndex].tasks.findIndex(t => t.id === savedTask.id);
+      try {
+        // Находим колонку по ID
+        const columnIndex = this.board.columns.findIndex(col => col.id === savedTask.column);
         
-        if (taskIndex !== -1) {
-          this.board.columns[columnIndex].tasks.splice(taskIndex, 1, savedTask);
-        } else {
-          this.board.columns[columnIndex].tasks.push(savedTask);
-        }
-
-        // Удаляем некорректный PATCH-запрос для колонки
-        // Вместо этого обновляем задачу через API
-        try {
-          if (savedTask.id) {
-            await axios.patch(`/api/tasks/${savedTask.id}/`, savedTask, {
-              headers: {
-                Authorization: `Bearer ${localStorage.getItem('token')}`
-              }
-            });
+        if (columnIndex !== -1) {
+          // Обновляем или добавляем задачу в UI
+          const taskIndex = this.board.columns[columnIndex].tasks.findIndex(t => t.id === savedTask.id);
+          
+          if (taskIndex !== -1) {
+            // Заменяем существующую задачу
+            // this.$set(this.board.columns[columnIndex].tasks, taskIndex, savedTask);
+            this.board.columns[columnIndex].tasks[taskIndex] = savedTask;
           } else {
-            const response = await axios.post('/api/tasks/', savedTask, {
-              headers: {
-                Authorization: `Bearer ${localStorage.getItem('token')}`
-              }
-            });
-            // Обновляем ID созданной задачи
-            savedTask.id = response.data.id;
+            // Добавляем новую задачу
+            this.board.columns[columnIndex].tasks.push(savedTask);
           }
-        } catch (error) {
-          console.error('Ошибка сохранения задачи:', error);
         }
+      } catch (error) {
+        console.error('Ошибка обновления задачи на доске:', error);
       }
-
-      this.closeModal();
     },
     async deleteTask(task) {
       const columnIndex = this.board.columns.findIndex(col =>
@@ -252,8 +235,29 @@ export default {
       }
     },
     async updateColumnTasks(columnIndex, tasks) {
-      this.board.columns[columnIndex].tasks = tasks;
-      await this.saveBoard();
+      try {
+        this.board.columns[columnIndex].tasks = tasks;
+        
+        await this.fetchBoardData();
+        
+        // Обновляем порядок задач на сервере
+        for (let i = 0; i < tasks.length; i++) {
+          const task = tasks[i];
+          await axios.patch(`/api/tasks/${task.id}/`, 
+            { 
+              column: this.board.columns[columnIndex].id,
+              order: i 
+            }, 
+            {
+              headers: {
+                Authorization: `Bearer ${localStorage.getItem('token')}`
+              }
+            }
+          );
+        }
+      } catch (error) {
+        console.error('Ошибка обновления порядка задач:', error);
+      }
     },
     openModal(task) {
       this.currentTask = { ...task };

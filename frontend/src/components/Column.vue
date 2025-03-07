@@ -104,7 +104,28 @@ export default {
       }
     },
     async onTaskChange(event) {
-      if (event.moved) {
+      // Если задача была перемещена из одной колонки в другую
+      if (event.added) {
+        const task = event.added.element;
+        try {
+          const newOrder = this.tasks.length - 1;
+          
+          await axios.patch(`/api/tasks/${task.id}/`, {
+            column: this.column.id,
+            order: newOrder
+          }, {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem('token')}`
+            }
+          });
+          
+          this.$emit('update-tasks', this.tasks);
+        } catch (error) {
+          console.error('Ошибка добавления задачи в колонку:', error);
+        }
+      }
+      // Если задача была перемещена внутри колонки
+      else if (event.moved) {
         const task = event.moved.element;
         try {
           await axios.patch(`/api/tasks/${task.id}/`, {
@@ -116,12 +137,26 @@ export default {
             }
           });
           this.$emit('update-tasks', this.tasks);
-          this.$forceUpdate();
         } catch (error) {
-          console.error('Ошибка перемещения:', error);
-          // Откат изменений
-          this.tasks.splice(event.moved.newIndex, 1);
-          this.tasks.splice(event.moved.oldIndex, 0, task);
+          console.error('Ошибка перемещения задачи:', error);
+        }
+      }
+      
+      // Если задача была добавлена из другой колонки
+      if (event.added) {
+        const task = event.added.element;
+        try {
+          await axios.patch(`/api/tasks/${task.id}/`, {
+            column: this.column.id,
+            order: event.added.newIndex
+          }, {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem('token')}`
+            }
+          });
+          this.$emit('update-tasks', this.tasks);
+        } catch (error) {
+          console.error('Ошибка добавления задачи в колонку:', error);
         }
       }
     },

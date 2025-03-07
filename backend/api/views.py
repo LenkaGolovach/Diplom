@@ -6,8 +6,9 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from .models import Board, Column, Task
 from .serializers import BoardSerializer, ColumnSerializer, TaskSerializer
-from .models import CustomUser 
+from .models import CustomUser, FileAttachment
 import logging
+import json
 from django.contrib.auth import get_user_model
 from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, JSONParser
@@ -57,6 +58,20 @@ class TaskViewSet(viewsets.ModelViewSet):
         context = super().get_serializer_context()
         context['request'] = self.request
         return context
+
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        
+        # Handle deleted files
+        deleted_files = request.data.get('deleted_files', [])
+        if deleted_files:
+            try:
+                deleted_file_ids = [int(id) for id in deleted_files]
+                FileAttachment.objects.filter(id__in=deleted_file_ids, task=instance).delete()
+            except ValueError as e:
+                logger.error(f"Error parsing deleted_files: {e}")
+        
+        return super().update(request, *args, **kwargs)
 
 # Аутентификация
 class LoginView(APIView):

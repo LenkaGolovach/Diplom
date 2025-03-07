@@ -8,12 +8,12 @@
           class="task-title"
           @dblclick="startEditingTitle"
         >
-          {{ task.name || 'Новая задача' }}
+          {{ localTask.name || 'Новая задача' }}
         </div>
         <input
           v-else
           ref="titleInput"
-          v-model="task.name"
+          v-model="localTask.name"
           @blur="stopEditingTitle"
           @keyup.enter="stopEditingTitle"
           class="task-title-input"
@@ -25,7 +25,7 @@
       <div class="form-group">
         <label>Описание:</label>
         <textarea
-          v-model="task.description"
+          v-model="localTask.description"
           placeholder="Введите описание задачи"
           class="description-input"
         ></textarea>
@@ -46,7 +46,7 @@
 
       <!-- Список подзадач -->
       <div class="subtasks">
-        <div v-for="(subtask, index) in task.subtasks" :key="index" class="subtask">
+        <div v-for="(subtask, index) in localTask.subtasks" :key="index" class="subtask">
           <input
             type="checkbox"
             v-model="subtask.completed"
@@ -77,7 +77,7 @@
       <div class="file-section">
         <label>Прикрепленные файлы:</label>
         <div class="file-list">
-          <div v-for="(file, index) in task.files" :key="index" class="file-item">
+          <div v-for="(file, index) in localTask.files" :key="index" class="file-item">
             <div class="file-preview" @click="downloadFile(file)">
               <img v-if="isImage(file.type)" :src="file.url" class="thumbnail">
               <div v-else class="file-icon">
@@ -113,7 +113,6 @@
 </template>
 
 <script>
-import { reactive } from 'vue';
 import axios from 'axios';
 
 export default {
@@ -123,8 +122,16 @@ export default {
   data() {
     return {
       isEditingTitle: false,
-      // Используем реактивную обертку для подзадач
-      localTask: reactive({ ...this.task })
+      localTask: {
+        id: this.task.id,
+        name: this.task.name || '',
+        description: this.task.description || '',
+        subtasks: Array.isArray(this.task.subtasks) ? [...this.task.subtasks] : [],
+        files: Array.isArray(this.task.attachments) ? [...this.task.attachments] : [],
+        column: this.task.column,
+      },
+      uploadedFiles: [],
+      deletedFileIds: [],
     };
   },
   computed: {
@@ -135,7 +142,7 @@ export default {
     },
     hasSubtasks() {
       return this.localTask.subtasks && this.localTask.subtasks.length > 0;
-    }
+    },
   },
   methods: {
     startEditingTitle() {
@@ -169,7 +176,7 @@ export default {
       });
     },
     deleteSubtask(index) {
-      this.task.subtasks.splice(index, 1);
+      this.localTask.subtasks.splice(index, 1);
     },
     updateProgress() {
       // Обновление прогресса происходит автоматически через computed свойство
@@ -177,101 +184,105 @@ export default {
     closeModal() {
       this.$emit('close');
     },
+    isImage(type) {
+      return type && type.startsWith('image/');
+    },
+    handleFileUpload(e) {
+      const files = Array.from(e.target.files);
+      
+      // Проверяем наличие файлов
+      if (!files || files.length === 0) return;
+      
+      // Сохраняем файлы для отправки на сервер
+      this.uploadedFiles = [...this.uploadedFiles, ...files];
+      
+      // Отображаем превью файлов
+      files.forEach(file => {
+        const reader = new FileReader();
+        
+        reader.onload = (e) => {
+          if (!this.localTask.files) {
+            this.localTask.files = [];
+          }
+          
+          this.localTask.files.push({
+            name: file.name,
+            type: file.type,
+            url: e.target.result,
+            isNew: true // Флаг для новых файлов
+          });
+        };
+        
+        reader.readAsDataURL(file);
+      });
+      
+      // Сбрасываем значение инпута
+      this.$refs.fileInput.value = '';
+    },
     async saveTask() {
       try {
-        const columnId = this.task.column instanceof Object 
-          ? this.task.column.id 
-          : this.task.column;
-
-        if (!columnId) {
-          throw new Error('Колонка не выбрана');
-        }
-
         const formData = new FormData();
-        formData.append('name', this.task.name);
-        formData.append('description', this.task.description || '');
+        formData.append('name', this.localTask.name);
+        formData.append('description', this.localTask.description || '');
+        
+        const columnId = this.localTask.column instanceof Object 
+          ? this.localTask.column.id 
+          : this.localTask.column;
+        
         formData.append('column', columnId);
-
-        // Добавляем подзадачи как JSON
-        if (this.task.subtasks) {
-          formData.append('subtasks', JSON.stringify(this.task.subtasks));
+        
+        // Подзадачи - очищаем поле editing перед отправкой
+        if (this.localTask.subtasks && this.localTask.subtasks.length > 0) {
+          const cleanSubtasks = this.localTask.subtasks.map(s => ({
+            id: s.id,
+            name: s.name,
+            completed: s.completed
+          }));
+          formData.append('subtasks', JSON.stringify(cleanSubtasks));
         }
         
-        // Добавляем файлы
-        if (this.$refs.fileInput.files) {
-          Array.from(this.$refs.fileInput.files).forEach(file => {
+        // Новые файлы
+        if (this.uploadedFiles.length > 0) {
+          this.uploadedFiles.forEach(file => {
             formData.append('attachments', file);
           });
         }
 
-        let url = '/api/tasks/';
-        let method = 'post';
-        
-        if (this.task.id) {
-          url = `/api/tasks/${this.task.id}/`;
-          method = 'put';
+        if (this.deletedFileIds.length > 0) {
+          this.deletedFileIds.forEach(id => {
+              formData.append('deleted_files', id.toString());
+          });
         }
-
-        const response = await axios({
-          method,
-          url,
-          data: formData,
+        
+        const config = {
           headers: {
             'Content-Type': 'multipart/form-data',
             Authorization: `Bearer ${localStorage.getItem('token')}`
           }
-        });
-
+        };
+        
+        let response;
+        if (this.localTask.id) {
+          response = await axios.patch(`/api/tasks/${this.localTask.id}/`, formData, config);
+        } else {
+          response = await axios.post('/api/tasks/', formData, config);
+        }
+        
         this.$emit('saveTask', response.data);
         this.closeModal();
       } catch (error) {
-        console.error('Ошибка сохранения задачи:', (error.response && error.response.data) || error.message);
-        alert(`Ошибка: ${(error.response && error.response.data && error.response.data.detail) || error.message}`);
+        console.error('Ошибка сохранения задачи:', error);
+        alert(`Ошибка: ${(error.response && error.response.data) || error.message}`);
       }
     },
-    isImage(type) {
-      return type.startsWith('image/');
-    },
-    handleFileUpload(e) {
-      const files = Array.from(e.target.files); // Конвертируем FileList в массив
-      
-      // Проверяем наличие файлов
-      if (!files || files.length === 0) return;
-
-      // Сбрасываем значение инпута
-      const resetInput = () => {
-        this.$refs.fileInput.value = '';
-      };
-
-      files.forEach((file) => { // Используем forEach вместо for-loop
-        const reader = new FileReader();
-        
-        reader.onload = (e) => {
-          // Проверяем существование файла
-          if (!file) return;
-
-          // Инициализируем массив файлов если нужно
-          if (!this.task.files) {
-            this.task.files = [];
-          }
-
-          // Добавляем файл в массив
-          this.task.files.push({
-            name: file.name,
-            type: file.type,
-            url: e.target.result
-          });
-        };
-
-        reader.onerror = resetInput;
-        reader.readAsDataURL(file);
-      });
-
-      resetInput();
-    },
     removeFile(index) {
-      if (this.task.files && this.task.files.length > index) {
-        this.task.files.splice(index, 1);
+      if (this.localTask.files && this.localTask.files.length > index) {
+        const file = this.localTask.files[index];
+        if (file.id) {
+          // If the file has an ID, it's from the server, so add it to deletedFileIds
+          this.deletedFileIds.push(file.id);
+        }
+        this.localTask.files.splice(index, 1);
       }
     },
     downloadFile(file) {
