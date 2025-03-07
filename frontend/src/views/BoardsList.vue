@@ -2,7 +2,7 @@
   <div class="boards-list">
     <div class="header">
       <h1>Мои доски</h1>
-      <button class="add-board-button" @click="createBoard">+ Создать доску</button>
+      <button class="add-board-button" @click="showCreateModal">+ Создать доску</button>
       <button class="logout-button" @click="logout">Выйти</button>
     </div>
     <div class="board-cards">
@@ -13,18 +13,51 @@
         @click="goToBoard(board.id)"
       >
         {{ board.name }}
+        <button @click.stop="confirmDelete(board)" class="delete-board-btn">×</button>
       </div>
     </div>
+
+    <ConfirmationModal
+      v-if="showDeleteModal"
+      title="Удаление доски"
+      :message="deleteMessage"
+      confirm-text="Удалить"
+      @confirm="deleteBoard"
+      @close="closeDeleteModal"
+    />
+
+    <CreateBoardModal
+      v-if="showCreateBoardModal"
+      @create="createBoard"
+      @close="closeCreateModal"
+    />
+
   </div>
 </template>
 
 <script>
 import axios from 'axios';
+import ConfirmationModal from '@/components/ConfirmationModel.vue' 
+import CreateBoardModal from '@/components/CreateBoardModel.vue'
 
 export default {
+  computed: {
+    deleteMessage() {
+      return this.selectedBoard
+        ? `Вы уверены, что хотите удалить доску «${this.selectedBoard.name}»?`
+        : 'Вы уверены, что хотите удалить эту доску?';
+    }
+  },
+  components: {
+    ConfirmationModal,
+    CreateBoardModal
+  },
   data() {
     return {
       boards: [],
+      showDeleteModal: false,
+      showCreateBoardModal: false,
+      selectedBoard: null
     };
   },
   async created() {
@@ -46,20 +79,55 @@ export default {
         console.error('Ошибка загрузки досок:', errorMessage);
       }
     },
-    async createBoard() {
+    confirmDelete(board) {
+      this.selectedBoard = {...board};
+      this.showDeleteModal = true;
+    },
+    async deleteBoard() {
+      if (!this.selectedBoard) return; // Защита от null
+
+      try {
+        const boardId = this.selectedBoard.id; // Сохраняем ID заранее
+        await axios.delete(`/api/boards/${boardId}/`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        
+        // Фильтруем доски по сохраненному ID
+        this.boards = this.boards.filter(b => b.id !== boardId);
+        this.closeDeleteModal();
+      } catch (error) {
+        console.error('Ошибка удаления доски:', error);
+      }
+    },
+    closeDeleteModal() {
+      this.showDeleteModal = false
+      this.selectedBoard = null
+    },
+    showCreateModal() {
+      this.showCreateBoardModal = true
+    },
+    closeCreateModal() {
+      this.showCreateBoardModal = false
+    },
+    async createBoard(name) {
       try {
         const response = await axios.post(
           '/api/boards/',
-          { name: 'Новая доска' },
+          { name },
           {
             headers: {
               Authorization: `Bearer ${localStorage.getItem('token')}`,
+              'Content-Type': 'application/json'
             },
           }
         );
-        this.boards.push(response.data);
+        this.boards = [response.data, ...this.boards];
+        this.closeCreateModal();
       } catch (error) {
         console.error('Ошибка создания доски:', error.response.data);
+        alert('Не удалось создать доску. Проверьте введенные данные.');
       }
     },
     goToBoard(boardId) {
@@ -75,7 +143,9 @@ export default {
 
 <style scoped>
 .boards-list {
-  padding: 24px;
+  padding: 20px;
+  max-width: 800px;
+  margin: 0 auto;
 }
 
 .header {
@@ -118,6 +188,7 @@ export default {
 }
 
 .board-card {
+  position: relative; 
   background: white;
   padding: 16px;
   border-radius: 4px;
@@ -128,5 +199,21 @@ export default {
 
 .board-card:hover {
   background: #f5f6f8;
+}
+
+.delete-board-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: none;
+  border: none;
+  color: #5e6c84;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.delete-board-btn:hover {
+  color: #ff4444;
 }
 </style>
