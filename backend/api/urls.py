@@ -8,9 +8,15 @@ from .views import (
     TaskViewSet,
     LoginView,
     RegisterView,
+    UserViewSet
+)
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
 )
 
 router = DefaultRouter()
+router.register(r'users', UserViewSet, basename='user')
 router.register(r'boards', BoardViewSet, basename='board')
 router.register(r'columns', ColumnViewSet, basename='column')
 router.register(r'tasks', TaskViewSet, basename='task')
@@ -20,6 +26,8 @@ urlpatterns = [
     path('auth/login/', LoginView.as_view(), name='login'),
     path('auth/register/', RegisterView.as_view(), name='register'),
     path('tasks/', TaskViewSet.as_view({'get': 'list', 'post': 'create'})),
+    path('api/auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('tasks/<int:pk>/', TaskViewSet.as_view({'get': 'retrieve', 'put': 'update', 'patch': 'partial_update', 'delete': 'destroy'})),
 ]
 

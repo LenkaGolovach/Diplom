@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Board, Column, Task, SubTask, FileAttachment
+from .models import Board, Column, Task, SubTask, FileAttachment, CustomUser
 import logging
 
 logger = logging.getLogger(__name__)
@@ -167,3 +167,18 @@ class BoardSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data['owner'] = self.context['request'].user
         return super().create(validated_data)
+
+class UserSerializer(serializers.ModelSerializer):
+    avatar = serializers.ImageField(required=False, allow_null=True)
+
+    class Meta:
+        model = CustomUser
+        fields = ['id', 'email', 'first_name', 'last_name', 'avatar']
+        read_only_fields = ['id']
+
+    def update(self, instance, validated_data):
+        # Обрабатываем загрузку аватара
+        avatar = validated_data.pop('avatar', None)
+        if avatar:
+            instance.avatar = avatar
+        return super().update(instance, validated_data)

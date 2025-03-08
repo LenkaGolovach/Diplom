@@ -6,10 +6,26 @@ import Board from '../views/Board.vue';
 
 const routes = [
   { path: '/', redirect: '/login' },
-  { path: '/login', component: Login },
-  { path: '/register', component: Register },
+  {
+    path: '/login',
+    name: 'Login',
+    component: () => import('../components/Auth/Login.vue'),
+    meta: { hideMenu: true }
+  },
+  {
+    path: '/register',
+    name: 'Register',
+    component: () => import('../components/Auth/Register.vue'),
+    meta: { hideMenu: true }
+  },
   { path: '/boards', component: BoardsList, meta: { requiresAuth: true } },
   { path: '/boards/:id', component: Board, meta: { requiresAuth: true }, props: true },
+  {
+    path: '/profile',
+    name: 'Profile',
+    component: () => import('../views/Profile.vue'),
+    meta: { requiresAuth: true }
+  }
 ];
 
 const router = createRouter({

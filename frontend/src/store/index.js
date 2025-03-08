@@ -8,7 +8,12 @@ export default createStore({
   },
   mutations: {
     setUser(state, user) {
-      state.user = user
+      state.user = {
+        ...user,
+        avatar_url: user.avatar ? 
+          `${process.env.VUE_APP_API_URL}${user.avatar}` : 
+          'https://www.gravatar.com/avatar/?d=identicon'
+      };
     },
     setToken(state, token) {
       state.token = token
@@ -46,6 +51,31 @@ export default createStore({
     },
     logout({ commit }) {
       commit('logout')
+    },
+    async fetchUser({ commit }) {
+      try {
+        const response = await axios.get('/api/users/me/', {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        commit('setUser', response.data);
+      } catch (error) {
+        console.error('Ошибка загрузки пользователя:', error);
+      }
+    },
+    async updateUser({ commit, state }, formData) {
+      try {
+        const response = await axios.patch('/api/users/me/', formData, {
+          headers: {
+            Authorization: `Bearer ${state.token}`,
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+        commit('setUser', response.data);
+      } catch (error) {
+        throw error;
+      }
     }
   },
   getters: {

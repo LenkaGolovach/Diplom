@@ -5,7 +5,7 @@ from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from .models import Board, Column, Task
-from .serializers import BoardSerializer, ColumnSerializer, TaskSerializer
+from .serializers import BoardSerializer, ColumnSerializer, TaskSerializer, UserSerializer
 from .models import CustomUser, FileAttachment
 import logging
 import json
@@ -133,3 +133,13 @@ class RegisterView(APIView):
             logger.error(f'Error during registration: {str(e)}')  # Логируем исключение
             return Response({'error': 'Internal server error'}, status=500)
 
+class UserViewSet(viewsets.ModelViewSet):
+    serializer_class = UserSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = (MultiPartParser, JSONParser)
+
+    def get_object(self):
+        return self.request.user
+
+    def get_queryset(self):
+        return CustomUser.objects.filter(id=self.request.user.id)
