@@ -1,84 +1,162 @@
 import { createStore } from 'vuex'
 import axios from 'axios'
 
+// Helper function to get base URL for assets
+const getBaseUrl = () => {
+  return process.env.VUE_APP_API_URL || '';
+};
+
+// Helper function to format avatar URL
+const formatAvatarUrl = (avatar) => {
+  if (!avatar) return 'https://www.gravatar.com/avatar/?d=identicon';
+  
+  // Check if the avatar is already a full URL
+  if (avatar.startsWith('http')) return avatar;
+  
+  // Otherwise, append the base URL
+  return `${getBaseUrl()}${avatar}`;
+};
+
+// Initialize axios with the token if it exists
+const token = localStorage.getItem('token');
+if (token) {
+  axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+}
+
 export default createStore({
   state: {
     user: null,
-    token: localStorage.getItem('token') || null
+    token: token || null
   },
   mutations: {
     setUser(state, user) {
+      if (!user) {
+        state.user = null;
+        return;
+      }
+      
       state.user = {
         ...user,
-        avatar_url: user.avatar ? 
-          `${process.env.VUE_APP_API_URL}${user.avatar}` : 
-          'https://www.gravatar.com/avatar/?d=identicon'
+        avatar_url: formatAvatarUrl(user.avatar)
       };
     },
     setToken(state, token) {
-      state.token = token
-      localStorage.setItem('token', token)
+      state.token = token;
+      if (token) {
+        localStorage.setItem('token', token);
+        // Set the token in axios defaults for all future requests
+        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      } else {
+        localStorage.removeItem('token');
+        delete axios.defaults.headers.common['Authorization'];
+      }
     },
-    logout() {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
+    logout(state) {
+      state.token = null;
+      state.user = null;
+      localStorage.removeItem('token');
       delete axios.defaults.headers.common['Authorization'];
     }
   },
   actions: {
-    async login({ commit }, credentials) {
+    async login({ commit, dispatch }, credentials) {
       try {
-          const response = await axios.post(
-              '/api/auth/login/', 
-              credentials,
-              {
-                  headers: {
-                      'Content-Type': 'application/json'
-                  }
-              }
-          );
-          commit('setUser', response.data.user);
-          commit('setToken', response.data.access); 
-          localStorage.setItem('token', response.data.access);
+        const response = await axios.post(
+          '/api/auth/login/', 
+          credentials,
+          {
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        
+        commit('setToken', response.data.access);
+        commit('setUser', response.data.user);
+        
+        // Fetch complete user data
+        await dispatch('fetchUser');
+        
+        return response.data;
       } catch (error) {
-          throw error; 
+        throw error; 
       }
     },
-    async register({ commit }, credentials) {
-      const response = await axios.post('/api/auth/register/', credentials)
-      commit('setToken', response.data.token)
-      commit('setUser', response.data.user)
+    async register({ commit, dispatch }, credentials) {
+      try {
+        const response = await axios.post('/api/auth/register/', credentials);
+        commit('setToken', response.data.token);
+        commit('setUser', response.data.user);
+        
+        // Fetch complete user data after registration
+        await dispatch('fetchUser');
+        
+        return response.data;
+      } catch (error) {
+        throw error;
+      }
     },
     logout({ commit }) {
-      commit('logout')
+      commit('logout');
     },
-    async fetchUser({ commit }) {
+    async fetchUser({ commit, state }) {
+      if (!state.token) return;
+      
       try {
         const response = await axios.get('/api/users/me/', {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`
+            Authorization: `Bearer ${state.token}`
           }
         });
         commit('setUser', response.data);
       } catch (error) {
         console.error('Ошибка загрузки пользователя:', error);
+        // If unauthorized, logout
+        if (error.response && error.response.status === 401) {
+          commit('logout');
+        }
       }
     },
-    async updateUser({ commit, state }, formData) {
+    async updateUser({ commit, state }, userData) {
       try {
-        const response = await axios.patch('/api/users/me/', formData, {
+        let contentType = 'application/json';
+        let finalData = userData;
+        
+        // Check if userData is FormData object (for file uploads)
+        if (userData instanceof FormData) {
+          contentType = 'multipart/form-data';
+        } else {
+          // Convert regular object to FormData to handle both text fields and files
+          const formData = new FormData();
+          
+          // Add all properties from userData to formData
+          for (const key in userData) {
+            if (userData.hasOwnProperty(key)) {
+              formData.append(key, userData[key]);
+            }
+          }
+          
+          finalData = formData;
+        }
+        
+        const response = await axios.patch('/api/users/me/', finalData, {
           headers: {
             Authorization: `Bearer ${state.token}`,
-            'Content-Type': 'multipart/form-data'
+            'Content-Type': contentType
           }
         });
+        
         commit('setUser', response.data);
+        return response.data;
       } catch (error) {
+        console.error('Error updating user:', error.response ? error.response.data : error);
         throw error;
       }
     }
   },
   getters: {
-    isAuthenticated: state => !!state.token
+    isAuthenticated: state => !!state.token,
+    currentUser: state => state.user,
+    token: state => state.token
   }
-})
+});

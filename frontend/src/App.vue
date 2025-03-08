@@ -1,7 +1,7 @@
 <template>
   <div>
     <template v-if="showMenu">
-      <Sidebar :isOpen="isMenuOpen" :user="currentUser" />
+      <Sidebar :isOpen="isMenuOpen" />
       <button 
         class="menu-toggle" 
         :class="{ 'menu-toggle-shifted': isMenuOpen }"
@@ -12,7 +12,7 @@
     </template>
     
     <div class="content" :class="{ 'content-shifted': isMenuOpen && showMenu }">
-      <router-view/>
+      <router-view @auth-changed="checkAuthStatus"/>
     </div>
   </div>
 </template>
@@ -24,30 +24,35 @@ export default {
   components: { Sidebar },
   data() {
     return {
-      isMenuOpen: false,
-      currentUser: null
+      isMenuOpen: false
     }
   },
   computed: {
+    // Изменяем логику - показываем меню на всех страницах, кроме login и register
     showMenu() {
-      return !['/login', '/register'].includes(this.$route.path)
+      return !['/login', '/register'].includes(this.$route.path);
     }
   },
   watch: {
     $route() {
-      this.isMenuOpen = false
+      this.isMenuOpen = false;
+      this.checkAuthStatus();
     }
   },
   methods: {
     toggleMenu() {
-      this.isMenuOpen = !this.isMenuOpen
+      this.isMenuOpen = !this.isMenuOpen;
     },
-    loadUser() {
-      this.currentUser = JSON.parse(localStorage.getItem('user'))
+    checkAuthStatus() {
+      // Если токен существует, но данных пользователя нет, загружаем их
+      if (this.$store.getters.isAuthenticated && !this.$store.getters.currentUser) {
+        this.$store.dispatch('fetchUser');
+      }
     }
   },
   created() {
-    this.loadUser()
+    // При создании компонента проверяем статус аутентификации
+    this.checkAuthStatus();
   }
 }
 </script>

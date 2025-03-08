@@ -1,7 +1,7 @@
 <template>
   <div class="sidebar" :class="{ 'sidebar-open': isOpen }">
-    <div class="user-info">
-      <img :src="user.avatar" class="avatar" alt="Avatar">
+    <div class="user-info" v-if="user">
+      <img :src="avatarUrl" class="avatar" alt="Avatar">
       <div class="user-name">{{ fullName }}</div>
     </div>
     
@@ -27,7 +27,12 @@ export default {
       return this.$store.state.user;
     },
     fullName() {
+      if (!this.user) return '';
       return [this.user.first_name, this.user.last_name].filter(Boolean).join(' ') || this.user.email;
+    },
+    avatarUrl() {
+      if (!this.user) return 'https://www.gravatar.com/avatar/?d=identicon';
+      return this.user.avatar_url || 'https://www.gravatar.com/avatar/?d=identicon';
     }
   },
   props: {
@@ -35,7 +40,7 @@ export default {
   },
   methods: {
     logout() {
-      localStorage.removeItem('token');
+      this.$store.dispatch('logout');
       this.$router.push('/login');
     }
   }
@@ -65,6 +70,7 @@ export default {
   height: 80px;
   border-radius: 50%;
   margin-bottom: 15px;
+  object-fit: cover;
 }
 
 .user-name {

@@ -42,4 +42,17 @@ router.beforeEach((to, from, next) => {
   }
 });
 
+router.beforeEach((to, from, next) => {
+  const isAuthenticated = localStorage.getItem('token');
+  
+  if (to.meta.requiresAuth && !isAuthenticated) {
+    next('/login');
+  } else if ((to.path === '/login' || to.path === '/register') && isAuthenticated) {
+    // Redirect to boards if already authenticated
+    next('/boards');
+  } else {
+    next();
+  }
+});
+
 export default router;

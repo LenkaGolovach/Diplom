@@ -57,6 +57,7 @@ export default {
         // Сохраняем токен и пользователя
         localStorage.setItem('token', response.data.access);
         this.$store.commit('setUser', response.data.user);
+        this.$emit('auth-changed');
         this.$router.push('/boards');
       } catch (error) {
           console.error('Login error details:', error);

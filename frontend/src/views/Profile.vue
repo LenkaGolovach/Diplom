@@ -2,9 +2,13 @@
   <div class="profile-page">
     <h1>Профиль пользователя</h1>
     
-    <div class="profile-section">
+    <div v-if="loading" class="loading">
+      Loading...
+    </div>
+    
+    <div v-else class="profile-section">
       <div class="avatar-section">
-        <img :src="user.avatar_url" class="avatar" alt="Avatar">
+        <img :src="avatarUrl" class="avatar" alt="Avatar">
         <button class="change-avatar-btn" @click="changeAvatar">
           Сменить аватар
         </button>
@@ -14,15 +18,22 @@
       <div class="form-section">
         <div class="form-group">
           <label>Имя</label>
-          <input v-model="user.first_name" type="text">
+          <input v-model="userData.first_name" type="text">
         </div>
 
         <div class="form-group">
           <label>Фамилия</label>
-          <input v-model="user.last_name" type="text">
+          <input v-model="userData.last_name" type="text">
         </div>
 
-        <button class="save-btn" @click="saveProfile">Сохранить</button>
+        <div class="form-group">
+          <label>Email</label>
+          <input v-model="userData.email" type="email" readonly>
+        </div>
+
+        <button class="save-btn" @click="saveProfile" :disabled="saving">
+          {{ saving ? 'Сохранение...' : 'Сохранить' }}
+        </button>
       </div>
     </div>
   </div>
@@ -34,12 +45,22 @@ import axios from 'axios';
 export default {
   data() {
     return {
-      user: {
+      userData: {
         first_name: '',
         last_name: '',
-        avatar: null,
-        avatar_url: ''
+        email: '',
+      },
+      loading: true,
+      saving: false
+    }
+  },
+  computed: {
+    avatarUrl() {
+      const user = this.$store.state.user;
+      if (!user || !user.avatar_url) {
+        return 'https://www.gravatar.com/avatar/?d=identicon';
       }
+      return user.avatar_url;
     }
   },
   async created() {
@@ -47,20 +68,32 @@ export default {
   },
   methods: {
     async loadUserData() {
+      this.loading = true;
       try {
-        const response = await axios.get('/api/users/me/', {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`
+        // Use the store's user data if available
+        const storeUser = this.$store.state.user;
+        if (storeUser) {
+          this.userData = {
+            first_name: storeUser.first_name || '',
+            last_name: storeUser.last_name || '',
+            email: storeUser.email || '',
+          };
+        } else {
+          // Fetch from API if not in store
+          await this.$store.dispatch('fetchUser');
+          const user = this.$store.state.user;
+          if (user) {
+            this.userData = {
+              first_name: user.first_name || '',
+              last_name: user.last_name || '',
+              email: user.email || '',
+            };
           }
-        });
-        this.user = {
-          ...response.data,
-          avatar_url: response.data.avatar ? 
-            `${axios.defaults.baseURL}${response.data.avatar}` : 
-            'https://www.gravatar.com/avatar/?d=identicon'
-        };
+        }
       } catch (error) {
         console.error('Ошибка загрузки данных:', error);
+      } finally {
+        this.loading = false;
       }
     },
     changeAvatar() {
@@ -68,40 +101,38 @@ export default {
     },
     async uploadAvatar(e) {
       const file = e.target.files[0];
-      if(file) {
-        const formData = new FormData();
-        formData.append('avatar', file);
-        
-        try {
-          const response = await axios.patch('/api/users/me/', formData, {
-            headers: {
-              'Content-Type': 'multipart/form-data',
-              Authorization: `Bearer ${localStorage.getItem('token')}`
-            }
-          });
-          
-          this.user.avatar_url = URL.createObjectURL(file);
-          this.$store.commit('setUser', response.data);
-        } catch (error) {
-          console.error('Ошибка загрузки аватара:', error);
-        }
+      if(!file) return;
+      
+      this.saving = true;
+      const formData = new FormData();
+      formData.append('avatar', file);
+      
+      try {
+        await this.$store.dispatch('updateUser', formData);
+        // Success notification
+        alert('Аватар обновлен');
+      } catch (error) {
+        console.error('Ошибка загрузки аватара:', error);
+        alert('Произошла ошибка при загрузке аватара');
+      } finally {
+        this.saving = false;
       }
     },
     async saveProfile() {
+      this.saving = true;
       try {
-        const response = await axios.patch('/api/users/me/', {
-          first_name: this.user.first_name,
-          last_name: this.user.last_name
-        }, {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`
-          }
-        });
+        // Create FormData object to properly handle the request
+        const formData = new FormData();
+        formData.append('first_name', this.userData.first_name);
+        formData.append('last_name', this.userData.last_name);
         
-        this.$store.commit('setUser', response.data);
+        await this.$store.dispatch('updateUser', formData);
         alert('Изменения сохранены');
       } catch (error) {
         console.error('Ошибка сохранения:', error);
+        alert('Произошла ошибка при сохранении данных');
+      } finally {
+        this.saving = false;
       }
     }
   }
@@ -113,6 +144,13 @@ export default {
   max-width: 800px;
   margin: 20px auto;
   padding: 20px;
+}
+
+.loading {
+  text-align: center;
+  padding: 40px;
+  font-size: 18px;
+  color: #666;
 }
 
 .profile-section {
@@ -130,6 +168,8 @@ export default {
   height: 150px;
   border-radius: 50%;
   margin-bottom: 15px;
+  object-fit: cover;
+  border: 1px solid #ddd;
 }
 
 .change-avatar-btn {
@@ -152,6 +192,7 @@ export default {
 .form-group label {
   display: block;
   margin-bottom: 5px;
+  font-weight: 500;
 }
 
 .form-group input {
@@ -159,6 +200,11 @@ export default {
   padding: 8px;
   border: 1px solid #ddd;
   border-radius: 4px;
+}
+
+.form-group input[readonly] {
+  background-color: #f8f9fa;
+  cursor: not-allowed;
 }
 
 .save-btn {
@@ -169,5 +215,17 @@ export default {
   border-radius: 4px;
   cursor: pointer;
   margin-top: 20px;
+}
+
+.save-btn:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  .profile-section {
+    flex-direction: column;
+    gap: 20px;
+  }
 }
 </style>
