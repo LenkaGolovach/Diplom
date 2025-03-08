@@ -42,12 +42,11 @@ export default {
     toggleMenu() {
       this.isMenuOpen = !this.isMenuOpen
     },
-    loadUser() {
-      this.currentUser = JSON.parse(localStorage.getItem('user'))
-    }
   },
   created() {
-    this.loadUser()
+    if (this.$store.getters.isAuthenticated) {
+      this.$store.dispatch('fetchUser');
+    }
   }
 }
 </script>

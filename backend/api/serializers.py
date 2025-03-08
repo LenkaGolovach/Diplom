@@ -169,16 +169,18 @@ class BoardSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 class UserSerializer(serializers.ModelSerializer):
-    avatar = serializers.ImageField(required=False, allow_null=True)
+    avatar_url = serializers.SerializerMethodField()
 
     class Meta:
         model = CustomUser
-        fields = ['id', 'email', 'first_name', 'last_name', 'avatar']
+        fields = ['id', 'email', 'first_name', 'last_name', 'avatar_url']
         read_only_fields = ['id']
 
-    def update(self, instance, validated_data):
-        # Обрабатываем загрузку аватара
-        avatar = validated_data.pop('avatar', None)
-        if avatar:
-            instance.avatar = avatar
-        return super().update(instance, validated_data)
+    def get_avatar_url(self, obj):
+        if obj.avatar:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.avatar.url)
+            # Для случая, когда request отсутствует (например, тесты)
+            return f"{settings.BASE_URL}{obj.avatar.url}"
+        return None

@@ -143,3 +143,9 @@ class UserViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return CustomUser.objects.filter(id=self.request.user.id)
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+

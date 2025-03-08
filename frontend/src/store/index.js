@@ -73,6 +73,7 @@ export default createStore({
           }
         });
         commit('setUser', response.data);
+        return response.data;
       } catch (error) {
         throw error;
       }

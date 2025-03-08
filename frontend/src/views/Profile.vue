@@ -4,11 +4,16 @@
     
     <div class="profile-section">
       <div class="avatar-section">
-        <img :src="user.avatar_url" class="avatar" alt="Avatar">
-        <button class="change-avatar-btn" @click="changeAvatar">
+        <label for="avatar-upload" class="change-avatar-btn">
           Сменить аватар
-        </button>
-        <input type="file" hidden ref="avatarInput" @change="uploadAvatar" accept="image/*">
+        </label>
+        <input 
+          id="avatar-upload" 
+          type="file" 
+          hidden
+          @change="uploadAvatar"
+          accept="image/*"
+        >
       </div>
 
       <div class="form-section">
@@ -37,9 +42,15 @@ export default {
       user: {
         first_name: '',
         last_name: '',
-        avatar: null,
-        avatar_url: ''
       }
+    }
+  },
+  computed: {
+    avatarUrl() {
+      if (this.$store.state.user && this.$store.state.user.avatar_url) {
+        return this.$store.state.user.avatar_url;
+      }
+      return 'https://www.gravatar.com/avatar/?d=identicon';
     }
   },
   async created() {
@@ -48,57 +59,47 @@ export default {
   methods: {
     async loadUserData() {
       try {
-        const response = await axios.get('/api/users/me/', {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`
-          }
-        });
+        await this.$store.dispatch('fetchUser');
         this.user = {
-          ...response.data,
-          avatar_url: response.data.avatar ? 
-            `${axios.defaults.baseURL}${response.data.avatar}` : 
-            'https://www.gravatar.com/avatar/?d=identicon'
+          first_name: this.$store.state.user.first_name,
+          last_name: this.$store.state.user.last_name
         };
       } catch (error) {
         console.error('Ошибка загрузки данных:', error);
       }
     },
-    changeAvatar() {
-      this.$refs.avatarInput.click();
-    },
     async uploadAvatar(e) {
       const file = e.target.files[0];
-      if(file) {
-        const formData = new FormData();
-        formData.append('avatar', file);
-        
+      if (file) {
         try {
+          const formData = new FormData();
+          formData.append('avatar', file);
+
           const response = await axios.patch('/api/users/me/', formData, {
             headers: {
               'Content-Type': 'multipart/form-data',
               Authorization: `Bearer ${localStorage.getItem('token')}`
             }
           });
-          
-          this.user.avatar_url = URL.createObjectURL(file);
+
+          // Обновляем хранилище и локальное состояние
           this.$store.commit('setUser', response.data);
+          
+          // Принудительно обновляем URL аватара
+          this.user.avatar_url = response.data.avatar_url + `?t=${Date.now()}`;
+
         } catch (error) {
           console.error('Ошибка загрузки аватара:', error);
+          alert('Ошибка при обновлении аватара');
         }
       }
     },
     async saveProfile() {
       try {
-        const response = await axios.patch('/api/users/me/', {
+        await this.$store.dispatch('updateUser', {
           first_name: this.user.first_name,
           last_name: this.user.last_name
-        }, {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`
-          }
         });
-        
-        this.$store.commit('setUser', response.data);
         alert('Изменения сохранены');
       } catch (error) {
         console.error('Ошибка сохранения:', error);
@@ -133,6 +134,7 @@ export default {
 }
 
 .change-avatar-btn {
+  display: inline-block;
   background: #007bff;
   color: white;
   border: none;

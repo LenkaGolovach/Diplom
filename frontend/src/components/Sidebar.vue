@@ -1,7 +1,7 @@
 <template>
   <div class="sidebar" :class="{ 'sidebar-open': isOpen }">
     <div class="user-info">
-      <img :src="user.avatar" class="avatar" alt="Avatar">
+      <img :src="avatarUrl" class="avatar" alt="Avatar">
       <div class="user-name">{{ fullName }}</div>
     </div>
     
@@ -24,7 +24,10 @@
 export default {
   computed: {
     user() {
-      return this.$store.state.user;
+      return this.$store.state.user || {};
+    },
+    avatarUrl() {
+      return this.user.avatar_url || 'https://www.gravatar.com/avatar/?d=identicon';
     },
     fullName() {
       return [this.user.first_name, this.user.last_name].filter(Boolean).join(' ') || this.user.email;
