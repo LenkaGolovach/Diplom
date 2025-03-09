@@ -25,6 +25,12 @@ const routes = [
     name: 'Profile',
     component: () => import('../views/Profile.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/invite/:token',
+    name: 'Invite',
+    component: () => import('../views/InviteView.vue'),
+    meta: { requiresAuth: true }
   }
 ];
 

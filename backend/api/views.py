@@ -5,8 +5,8 @@ from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from .models import Board, Column, Task
-from .serializers import BoardSerializer, ColumnSerializer, TaskSerializer, UserSerializer
-from .models import CustomUser, FileAttachment
+from .serializers import BoardSerializer, ColumnSerializer, TaskSerializer, UserSerializer, BoardMemberSerializer
+from .models import CustomUser, FileAttachment, BoardMember
 import logging
 import json
 from django.contrib.auth import get_user_model
@@ -14,6 +14,10 @@ from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, JSONParser
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
+import secrets
+from django.shortcuts import get_object_or_404
+from django.db import transaction
+from rest_framework.exceptions import PermissionDenied
 
 logger = logging.getLogger(__name__) 
 
@@ -23,11 +27,52 @@ class BoardViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Board.objects.filter(owner=self.request.user)
+        queryset = Board.objects.all()
+        invite_token = self.request.query_params.get('invite_token', None)
+        if invite_token:
+            queryset = queryset.filter(invite_token=invite_token)
+        return queryset
 
     def perform_create(self, serializer):
         board = serializer.save(owner=self.request.user)
         board.create_default_columns()
+
+        BoardMember.objects.create(
+            user=self.request.user,
+            board=board,
+            role='owner'
+        )
+
+    @action(detail=True, methods=['post'])
+    def generate_invite(self, request, pk=None):
+        board = self.get_object()
+        token = secrets.token_urlsafe(32)
+        board.invite_token = token
+        board.save()
+        return Response({'invite_link': f'{settings.FRONTEND_URL}/invite/{token}/'})
+
+    @action(detail=True, methods=['post'])
+    def join(self, request, pk=None):
+        board = get_object_or_404(Board, invite_token=request.data.get('token'))
+        BoardMember.objects.get_or_create(
+            user=request.user,
+            board=board,
+            defaults={'role': 'member'}
+        )
+        return Response(status=status.HTTP_200_OK)
+
+class BoardMembersViewSet(viewsets.ModelViewSet):
+    serializer_class = BoardMemberSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        board_id = self.kwargs['board_id']
+        return BoardMember.objects.filter(board_id=board_id)
+
+    def perform_destroy(self, instance):
+        if instance.role == 'owner':
+            raise PermissionDenied("Нельзя удалить владельца")
+        instance.delete()
 
 # ViewSet для колонок
 class ColumnViewSet(viewsets.ModelViewSet):

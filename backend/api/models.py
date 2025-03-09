@@ -1,6 +1,7 @@
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+import uuid
 
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
@@ -56,6 +57,20 @@ class Board(models.Model):
         ]
         for data in columns_data:
             Column.objects.create(board=self, **data)
+
+class BoardMember(models.Model):
+    ROLE_CHOICES = (
+        ('owner', 'Владелец'),
+        ('member', 'Участник'),
+    )
+    
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    board = models.ForeignKey(Board, on_delete=models.CASCADE, related_name='members')
+    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='member')
+    joined_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'board')
 
 class Column(models.Model):
     board = models.ForeignKey(Board, related_name='columns', on_delete=models.CASCADE)

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Board, Column, Task, SubTask, FileAttachment, CustomUser
+from .models import Board, Column, Task, SubTask, FileAttachment, CustomUser, BoardMember
 import logging
 
 logger = logging.getLogger(__name__)
@@ -155,9 +155,18 @@ class ColumnSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'color', 'board', 'tasks', 'created_at', 'updated_at']
         read_only_fields = ['created_at', 'updated_at']
 
+class BoardMemberSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(source='user.email')
+    avatar = serializers.ImageField(source='user.avatar')
+
+    class Meta:
+        model = BoardMember
+        fields = ['email', 'avatar', 'role', 'joined_at']
+
 class BoardSerializer(serializers.ModelSerializer):
     columns = ColumnSerializer(many=True, read_only=True)
     owner = serializers.ReadOnlyField(source='owner.email')
+    members = BoardMemberSerializer(many=True, read_only=True, source='boardmember_set')
 
     class Meta:
         model = Board

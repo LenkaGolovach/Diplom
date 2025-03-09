@@ -1,21 +1,26 @@
 <template>
   <div class="board">
     <div class="board-header">
-      <div
-        v-if="!isEditingBoardName"
-        class="board-title"
-        @dblclick="startEditingBoardName"
-      >
-        {{ board.name }}
+      <div class="board-title-wrapper">
+        <div
+          v-if="!isEditingBoardName"
+          class="board-title"
+          @dblclick="startEditingBoardName"
+        >
+          {{ truncatedBoardName }}
+        </div>
+        <input
+          v-else
+          ref="boardNameInput"
+          v-model="board.name"
+          @blur="stopEditingBoardName"
+          @keyup.enter="stopEditingBoardName"
+          class="board-title-input"
+        />
+        <button @click="showMembersModal = true" class="members-button">
+          👥 Участники
+        </button>
       </div>
-      <input
-        v-else
-        ref="boardNameInput"
-        v-model="board.name"
-        @blur="stopEditingBoardName"
-        @keyup.enter="stopEditingBoardName"
-        class="board-title-input"
-      />
     </div>
 
     <div class="columns-container">
@@ -42,11 +47,20 @@
       @close="closeModal"
       @saveTask="saveTask"
     />
+
+    <BoardMembersModal
+      v-if="showMembersModal"
+      :board="board"
+      :current-user="currentUser"
+      @close="showMembersModal = false"
+      @update-members="fetchBoardData"
+    />
   </div>
 </template>
 
 <script>
 import Column from '../components/Column.vue';
+import BoardMembersModal from '../components/BoardMembersModal.vue'
 import TaskModal from '../components/TaskModal.vue';
 import axios from 'axios';
 import { reactive } from 'vue';
@@ -62,6 +76,7 @@ export default {
   components: {
     Column,
     TaskModal,
+    BoardMembersModal
   },
   props: {
     id: {
@@ -85,12 +100,32 @@ export default {
       },
       currentColumnIndex: null,
       isEditingBoardName: false,
+      showMembersModal: false,
+      currentUser: null
     };
   },
+  computed: {
+    truncatedBoardName() {
+      return this.board.name.length > 20 
+        ? this.board.name.substring(0, 17) + '...' 
+        : this.board.name
+    }
+  },
   async created() {
+    await this.fetchUser();
     await this.fetchBoardData();
   },
   methods: {
+    async fetchUser() {
+      try {
+        const response = await axios.get('/api/users/me/', {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+        })
+        this.currentUser = response.data
+      } catch (error) {
+        console.error('Ошибка загрузки пользователя:', error)
+      }
+    },
     async fetchBoardData() {
       try {
         const response = await axios.get(`/api/boards/${this.id}/`, {
@@ -289,7 +324,14 @@ export default {
   margin-bottom: 16px;
 }
 
+.board-title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
 .board-title {
+  max-width: 200px;
   font-size: 24px;
   font-weight: bold;
   cursor: pointer;
@@ -335,5 +377,13 @@ export default {
 
 .add-column-button:hover {
   background: #e0e0e0;
+}
+
+.members-button {
+  background: #f0f0f0;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
 }
 </style>
