@@ -70,25 +70,16 @@ export default {
     async loadUserData() {
       this.loading = true;
       try {
-        // Use the store's user data if available
-        const storeUser = this.$store.state.user;
-        if (storeUser) {
+        // Always fetch fresh user data from the API
+        await this.$store.dispatch('fetchUser');
+        const user = this.$store.state.user;
+        
+        if (user) {
           this.userData = {
-            first_name: storeUser.first_name || '',
-            last_name: storeUser.last_name || '',
-            email: storeUser.email || '',
+            first_name: user.first_name || '',
+            last_name: user.last_name || '',
+            email: user.email || '',
           };
-        } else {
-          // Fetch from API if not in store
-          await this.$store.dispatch('fetchUser');
-          const user = this.$store.state.user;
-          if (user) {
-            this.userData = {
-              first_name: user.first_name || '',
-              last_name: user.last_name || '',
-              email: user.email || '',
-            };
-          }
         }
       } catch (error) {
         console.error('Ошибка загрузки данных:', error);

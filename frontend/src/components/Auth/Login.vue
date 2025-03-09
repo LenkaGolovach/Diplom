@@ -41,23 +41,11 @@ export default {
     ...mapActions(['login']),
     async handleLogin() {
       try {
-        const response = await axios.post(
-          'http://localhost:8000/api/auth/login/',
-          {
-            email: this.email,
-            password: this.password
-          },
-          {
-            headers: {
-              'Content-Type': 'application/json'
-            }
-          }
-        );
+        await this.$store.dispatch('login', {
+          email: this.email,
+          password: this.password
+        });
         
-        // Сохраняем токен и пользователя
-        localStorage.setItem('token', response.data.access);
-        this.$store.commit('setUser', response.data.user);
-        this.$emit('auth-changed');
         this.$router.push('/boards');
       } catch (error) {
           console.error('Login error details:', error);

@@ -12,9 +12,12 @@ const formatAvatarUrl = (avatar) => {
   
   // Check if the avatar is already a full URL
   if (avatar.startsWith('http')) return avatar;
+
+  const baseUrl = getBaseUrl().replace(/\/+$/, '');
+  const avatarPath = avatar.replace(/^\/+/, '');
   
   // Otherwise, append the base URL
-  return `${getBaseUrl()}${avatar}`;
+  return `${baseUrl}/${avatarPath}`;
 };
 
 // Initialize axios with the token if it exists
@@ -72,7 +75,6 @@ export default createStore({
         );
         
         commit('setToken', response.data.access);
-        commit('setUser', response.data.user);
         
         // Fetch complete user data
         await dispatch('fetchUser');
@@ -86,7 +88,6 @@ export default createStore({
       try {
         const response = await axios.post('/api/auth/register/', credentials);
         commit('setToken', response.data.token);
-        commit('setUser', response.data.user);
         
         // Fetch complete user data after registration
         await dispatch('fetchUser');
@@ -108,6 +109,12 @@ export default createStore({
             Authorization: `Bearer ${state.token}`
           }
         });
+
+        const userData = {
+          ...response.data,
+          avatar_url: formatAvatarUrl(response.data.avatar)
+        };
+
         commit('setUser', response.data);
       } catch (error) {
         console.error('Ошибка загрузки пользователя:', error);

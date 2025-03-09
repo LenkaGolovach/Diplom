@@ -51,8 +51,17 @@ export default {
     }
   },
   created() {
-    // При создании компонента проверяем статус аутентификации
-    this.checkAuthStatus();
+    // Always try to fetch user data on app startup if we have a token
+    if (this.$store.getters.isAuthenticated) {
+      this.$store.dispatch('fetchUser').catch(error => {
+        // If there's an error fetching user data with the stored token,
+        // it might be invalid/expired, so log the user out
+        if (error.response && error.response.status === 401) {
+          this.$store.dispatch('logout');
+          this.$router.push('/login');
+        }
+      });
+    }
   }
 }
 </script>
