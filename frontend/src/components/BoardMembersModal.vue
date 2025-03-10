@@ -54,7 +54,9 @@ export default {
       return this.board.members || [];
     },
     isOwner() {
-      return this.currentUser && this.board.owner === this.currentUser.email;
+        return this.currentUser 
+            && this.board.owner 
+            && this.board.owner.email === this.currentUser.email;
     }
   },
   methods: {

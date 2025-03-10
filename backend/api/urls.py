@@ -21,7 +21,6 @@ router.register(r'users', UserViewSet, basename='user')
 router.register(r'boards', BoardViewSet, basename='board')
 router.register(r'columns', ColumnViewSet, basename='column')
 router.register(r'tasks', TaskViewSet, basename='task')
-# Add this to your BoardMembersViewSet router
 router.register(r'boards/(?P<board_id>\d+)/members', BoardMembersViewSet, basename='board-members')
 
 urlpatterns = [
@@ -32,6 +31,8 @@ urlpatterns = [
     path('api/auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('tasks/<int:pk>/', TaskViewSet.as_view({'get': 'retrieve', 'put': 'update', 'patch': 'partial_update', 'delete': 'destroy'})),
+    path('api/boards/check_invite/', BoardViewSet.as_view({'get': 'check_invite'})),
+    path('api/boards/join/', BoardViewSet.as_view({'post': 'join'})),
 ]
 
 # Добавляем URL для загрузки файлов

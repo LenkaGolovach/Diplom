@@ -4,6 +4,21 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+class UserSerializer(serializers.ModelSerializer):
+    avatar = serializers.ImageField(required=False, allow_null=True)
+
+    class Meta:
+        model = CustomUser
+        fields = ['id', 'email', 'first_name', 'last_name', 'avatar']
+        read_only_fields = ['id']
+
+    def update(self, instance, validated_data):
+        # Обрабатываем загрузку аватара
+        avatar = validated_data.pop('avatar', None)
+        if avatar:
+            instance.avatar = avatar
+        return super().update(instance, validated_data)
+
 class SubTaskSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(required=False)
     
@@ -165,7 +180,7 @@ class BoardMemberSerializer(serializers.ModelSerializer):
 
 class BoardSerializer(serializers.ModelSerializer):
     columns = ColumnSerializer(many=True, read_only=True)
-    owner = serializers.ReadOnlyField(source='owner.email')
+    owner = UserSerializer(read_only=True)
     members = BoardMemberSerializer(many=True, read_only=True)
 
     class Meta:
@@ -177,18 +192,10 @@ class BoardSerializer(serializers.ModelSerializer):
         validated_data['owner'] = self.context['request'].user
         return super().create(validated_data)
         
-
-class UserSerializer(serializers.ModelSerializer):
-    avatar = serializers.ImageField(required=False, allow_null=True)
-
-    class Meta:
-        model = CustomUser
-        fields = ['id', 'email', 'first_name', 'last_name', 'avatar']
-        read_only_fields = ['id']
-
-    def update(self, instance, validated_data):
-        # Обрабатываем загрузку аватара
-        avatar = validated_data.pop('avatar', None)
-        if avatar:
-            instance.avatar = avatar
-        return super().update(instance, validated_data)
+    def get_owner(self, obj):
+        return {
+            "id": obj.owner.id,
+            "email": obj.owner.email,
+            "avatar": obj.owner.avatar.url if obj.owner.avatar else None
+        }
+        

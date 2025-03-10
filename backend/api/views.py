@@ -68,15 +68,44 @@ class BoardViewSet(viewsets.ModelViewSet):
                 'invite_link': f'{settings.FRONTEND_URL}/invite/{board.invite_token}/'
             })
 
-    @action(detail=True, methods=['post'])
-    def join(self, request, pk=None):
-        board = get_object_or_404(Board, invite_token=request.data.get('token'))
-        BoardMember.objects.get_or_create(
-            user=request.user,
-            board=board,
-            defaults={'role': 'member'}
-        )
-        return Response(status=status.HTTP_200_OK)
+    @action(detail=False, methods=['get'])
+    def check_invite(self, request):
+        token = request.query_params.get('token')
+        if not token:
+            return Response({'error': 'Token required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            board = Board.objects.get(invite_token=token)
+            is_member = BoardMember.objects.filter(
+                user=request.user,
+                board=board
+            ).exists()
+            
+            return Response({
+                'board': BoardSerializer(board, context={'request': request}).data,
+                'is_member': is_member
+            })
+            
+        except Board.DoesNotExist:
+            return Response({'error': 'Invalid token'}, status=status.HTTP_404_NOT_FOUND)
+    
+    @action(detail=False, methods=['post'])
+    def join(self, request):
+        token = request.data.get('token')
+        try:
+            board = Board.objects.get(invite_token=token)
+            member, created = BoardMember.objects.get_or_create(
+                user=request.user,
+                board=board,
+                defaults={'role': 'member'}
+            )
+            return Response({
+                'success': True,
+                'is_new_member': created
+            })
+            
+        except Board.DoesNotExist:
+            return Response({'error': 'Invalid token'}, status=status.HTTP_404_NOT_FOUND)
 
 class BoardMembersViewSet(viewsets.ModelViewSet):
     serializer_class = BoardMemberSerializer
