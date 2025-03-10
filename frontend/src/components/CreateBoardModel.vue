@@ -56,7 +56,7 @@ export default {
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 1000;
+  z-index: 1001;
 }
 
 .modal-content {
@@ -65,6 +65,7 @@ export default {
   border-radius: 8px;
   width: 400px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 1002;
 }
 
 .board-name-input {

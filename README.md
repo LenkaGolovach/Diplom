@@ -1,6 +1,19 @@
 # Diplom
 
+Этот проект представляет собой веб-приложение для управления задачами с использованием досок Канбан. Проект использует Django для бэкенда и Vue.js для фронтенда.
+
 ## Запуск бэкенда (Django)
+
+### Настройка базы данных
+
+1. Установите PostgreSQL, если он ещё не установлен.
+2. Создайте базу данных:
+```bash
+sudo -u postgres psql
+CREATE DATABASE mydatabase;
+CREATE USER postgres WITH PASSWORD 'pass_for_post';
+GRANT ALL PRIVILEGES ON DATABASE mydatabase TO postgres;
+```
 
 ### Перейдите в директорию бэкенда:
 
@@ -28,24 +41,9 @@ pip install -r requirements.txt
 Создайте базу данных и примените миграции:
 
 ```bash
+python manage.py makemigrations
 python manage.py migrate
 ```
-
-#### Для запуска без миграций:
-
-Вы можете временно изменить настройки базы данных в settings.py, чтобы использовать SQLite в памяти. Это позволит вам запустить проект без необходимости применять миграции:
-
-```bash
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': ':memory:',
-    }
-}
-```
-
-Этот подход позволяет вам запустить сервер и протестировать функциональность, не связанную с базой данных.
-
 
 ### Запустите сервер разработки:
 

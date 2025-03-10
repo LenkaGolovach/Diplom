@@ -5,8 +5,8 @@ from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from .models import Board, Column, Task
-from .serializers import BoardSerializer, ColumnSerializer, TaskSerializer, UserSerializer, BoardMemberSerializer
-from .models import CustomUser, FileAttachment, BoardMember
+from .serializers import BoardSerializer, ColumnSerializer, TaskSerializer, UserSerializer, BoardMemberSerializer, TaskMemberSerializer
+from .models import CustomUser, FileAttachment, BoardMember, TaskMember
 import logging
 import json
 from django.contrib.auth import get_user_model
@@ -181,6 +181,28 @@ class TaskViewSet(viewsets.ModelViewSet):
                 logger.error(f"Error parsing deleted_files: {e}")
         
         return super().update(request, *args, **kwargs)
+
+class TaskMemberViewSet(viewsets.ModelViewSet):
+    serializer_class = TaskMemberSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return TaskMember.objects.filter(task_id=self.kwargs['task_pk'])
+
+    def create(self, request, *args, **kwargs):
+        task = get_object_or_404(Task, id=self.kwargs['task_pk'])
+        member, created = TaskMember.objects.get_or_create(
+            task=task,
+            user=request.user
+        )
+        return Response(self.get_serializer(member).data, 
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+    def destroy(self, request, *args, **kwargs):
+        task = get_object_or_404(Task, id=self.kwargs['task_pk'])
+        member = get_object_or_404(TaskMember, task=task, user=request.user)
+        member.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 # Аутентификация
 class LoginView(APIView):

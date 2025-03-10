@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Board, Column, Task, SubTask, FileAttachment, CustomUser, BoardMember
+from .models import Board, Column, Task, SubTask, FileAttachment, CustomUser, BoardMember, TaskMember
 import logging
 
 logger = logging.getLogger(__name__)
@@ -41,6 +41,14 @@ class FileAttachmentSerializer(serializers.ModelSerializer):
             validated_data['name'] = validated_data['file'].name
         return super().create(validated_data)
 
+class TaskMemberSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(source='user.email')
+    avatar = serializers.ImageField(source='user.avatar')
+
+    class Meta:
+        model = TaskMember
+        fields = ['email', 'avatar', 'joined_at']
+
 class TaskSerializer(serializers.ModelSerializer):
     subtasks = SubTaskSerializer(many=True, required=False)
     attachments = FileAttachmentSerializer(many=True, read_only=True)
@@ -49,6 +57,7 @@ class TaskSerializer(serializers.ModelSerializer):
         required=False,
         write_only=True
     )
+    members = TaskMemberSerializer(many=True, read_only=True)
 
     class Meta:
         model = Task
@@ -161,7 +170,7 @@ class TaskSerializer(serializers.ModelSerializer):
             )
     
         return instance
-        
+
 class ColumnSerializer(serializers.ModelSerializer):
     tasks = TaskSerializer(many=True, read_only=True)
 
@@ -198,4 +207,3 @@ class BoardSerializer(serializers.ModelSerializer):
             "email": obj.owner.email,
             "avatar": obj.owner.avatar.url if obj.owner.avatar else None
         }
-        

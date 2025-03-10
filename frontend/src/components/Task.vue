@@ -26,6 +26,27 @@
         +{{ hiddenAttachmentsCount }}
       </div>
     </div>
+    <div class="task-footer">
+      <div class="participants-preview">
+        <div 
+          v-for="member in task.members.slice(0, 3)" 
+          :key="member.email"
+          class="participant-avatar"
+        >
+          <img 
+            :src="member.avatar || '/default-avatar.png'" 
+            class="avatar"
+            :title="member.email"
+          >
+        </div>
+        <div 
+          v-if="task.members.length > 3" 
+          class="more-participants"
+        >
+          +{{ task.members.length - 3 }}
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -162,5 +183,34 @@ export default {
   width: 100%;
   height: 100%;
   object-fit: contain; /* Сохраняет пропорции */
+}
+
+.participants-preview {
+  display: flex;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.participant-avatar {
+  width: 25px;
+  height: 25px;
+}
+
+.avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.more-participants {
+  background: #e0e0e0;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8em;
 }
 </style>

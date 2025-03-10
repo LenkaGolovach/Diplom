@@ -137,7 +137,7 @@ export default {
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 2000;
+  z-index: 1001;
 }
 
 .modal-content {
@@ -149,6 +149,7 @@ export default {
   max-height: 80vh;
   overflow-y: auto;
   position: relative;
+  z-index: 1002;
 }
 
 .close-btn {

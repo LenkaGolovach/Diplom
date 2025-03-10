@@ -130,6 +130,7 @@ celerybeat.pid
 # Environments
 .env
 .venv
+.venv/
 env/
 venv/
 ENV/
@@ -169,3 +170,34 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Игнорировать файлы IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Игнорировать файлы Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+
+# Игнорировать миграции
+*/migrations/*
+!*/migrations/__init__.py
+
+# Игнорировать папку с медиафайлами
+backend/media/
+
+# Игнорировать файлы окружения
+.env
+.env.local
+
+# Игнорировать логи
+*.log
+
+# Игнорировать статические файлы (если они генерируются)
+backend/static/

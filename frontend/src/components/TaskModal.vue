@@ -103,6 +103,31 @@
         </label>
       </div>
 
+      <!-- Секция участников -->
+      <div class="participants-section">
+        <label>Участники:</label>
+        <div class="participants-list">
+          <div 
+            v-for="member in localTask.members" 
+            :key="member.email"
+            class="participant"
+          >
+            <img 
+              :src="member.avatar || '/default-avatar.png'" 
+              class="avatar"
+            >
+            <span>{{ member.email }}</span>
+          </div>
+        </div>
+        <button 
+          @click="toggleParticipation"
+          :class="['participation-btn', { 'joined': isParticipant }]"
+          :disabled="!localTask.id"
+        >
+          {{ isParticipant ? 'Отказаться' : 'Присоединиться' }}
+        </button>
+      </div>
+
       <!-- Кнопки управления -->
       <div class="actions">
         <button @click="saveTask" class="save-button">Сохранить</button>
@@ -132,6 +157,7 @@ export default {
       },
       uploadedFiles: [],
       deletedFileIds: [],
+      isParticipant: false,
     };
   },
   computed: {
@@ -267,6 +293,12 @@ export default {
         } else {
           response = await axios.post('/api/tasks/', formData, config);
         }
+
+        // Обновляем локальные данные задачи после сохранения
+        this.localTask = response.data;
+
+        // Проверяем участие пользователя в задаче
+        await this.checkParticipation();
         
         this.$emit('saveTask', response.data);
         this.closeModal();
@@ -294,6 +326,67 @@ export default {
       link.click(); // Инициируем скачивание
       document.body.removeChild(link); // Удаляем ссылку после скачивания
     },
+    async checkParticipation() {
+      if (!this.localTask.id) {
+        this.isParticipant = false;
+        return;
+      }
+      try {
+        const response = await axios.get(`/api/tasks/${this.localTask.id}/members/`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        this.isParticipant = response.data.some(m => m.email === this.$store.state.user.email);
+      } catch (error) {
+        console.error('Ошибка проверки участия:', error);
+      }
+    },
+    async toggleParticipation() {
+      if (!this.localTask.id) {
+        alert("Сначала сохраните задачу, чтобы присоединиться к ней.");
+        return;
+      }
+      try {
+        if (this.isParticipant) {
+          await axios.delete(`/api/tasks/${this.localTask.id}/members/${this.$store.state.user.id}/`, {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem('token')}`
+            }
+          });
+        } else {
+          await axios.post(`/api/tasks/${this.localTask.id}/members/`, {}, {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem('token')}`
+            }
+          });
+        }
+        await this.fetchTaskData();
+        await this.checkParticipation();
+      } catch (error) {
+        console.error('Ошибка изменения статуса участия:', error);
+      }
+    },
+    async fetchTaskData() {
+      if (!this.localTask.id) return;
+
+      try {
+        const response = await axios.get(`/api/tasks/${this.localTask.id}/`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+        });
+        this.localTask = response.data;
+      } catch (error) {
+        console.error('Ошибка загрузки данных задачи:', error);
+      }
+    },
+  },
+  mounted() {
+    if (this.localTask.id) {
+      this.fetchTaskData();
+      this.checkParticipation();
+    }
   }
 };
 </script>
@@ -309,6 +402,7 @@ export default {
   display: flex;
   justify-content: center;
   align-items: center;
+  z-index: 1001;
 }
 
 .modal-content {
@@ -317,6 +411,7 @@ export default {
   border-radius: 8px;
   width: 500px;
   max-width: 90%;
+  z-index: 1002;
 }
 
 .task-header {
@@ -537,5 +632,49 @@ export default {
   width: 24px; /* Размер иконки */
   height: 24px;
   object-fit: contain; /* Сохраняет пропорции */
+}
+
+.participants-section {
+  margin: 15px 0;
+}
+
+.participants-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.participant {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px;
+  background: #f0f0f0;
+  border-radius: 15px;
+}
+
+.avatar {
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+}
+
+.participation-btn {
+  padding: 8px 15px;
+  background: #0079bf;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.participation-btn.joined {
+  background: #eb5a46;
+}
+
+.participation-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
 }
 </style>

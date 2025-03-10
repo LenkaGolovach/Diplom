@@ -107,6 +107,14 @@ class SubTask(models.Model):
     def __str__(self):
         return f"{self.task.name} - {self.name}"
 
+class TaskMember(models.Model):
+    task = models.ForeignKey(Task, related_name='members', on_delete=models.CASCADE)
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    joined_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('task', 'user')
+
 class FileAttachment(models.Model):
     task = models.ForeignKey(Task, related_name='attachments', on_delete=models.CASCADE)
     file = models.FileField(upload_to='attachments/')
