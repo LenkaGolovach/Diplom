@@ -43,6 +43,7 @@ class Board(models.Model):
     owner = models.ForeignKey(CustomUser, related_name='boards', on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    invite_token = models.UUIDField(null=True, blank=True)
 
     def __str__(self):
         return self.name

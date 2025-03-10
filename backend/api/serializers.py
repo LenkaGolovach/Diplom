@@ -166,7 +166,7 @@ class BoardMemberSerializer(serializers.ModelSerializer):
 class BoardSerializer(serializers.ModelSerializer):
     columns = ColumnSerializer(many=True, read_only=True)
     owner = serializers.ReadOnlyField(source='owner.email')
-    members = BoardMemberSerializer(many=True, read_only=True, source='boardmember_set')
+    members = BoardMemberSerializer(many=True, read_only=True)
 
     class Meta:
         model = Board
@@ -176,6 +176,7 @@ class BoardSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data['owner'] = self.context['request'].user
         return super().create(validated_data)
+        
 
 class UserSerializer(serializers.ModelSerializer):
     avatar = serializers.ImageField(required=False, allow_null=True)

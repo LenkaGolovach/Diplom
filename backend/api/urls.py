@@ -8,7 +8,8 @@ from .views import (
     TaskViewSet,
     LoginView,
     RegisterView,
-    UserViewSet
+    UserViewSet,
+    BoardMembersViewSet
 )
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -20,6 +21,8 @@ router.register(r'users', UserViewSet, basename='user')
 router.register(r'boards', BoardViewSet, basename='board')
 router.register(r'columns', ColumnViewSet, basename='column')
 router.register(r'tasks', TaskViewSet, basename='task')
+# Add this to your BoardMembersViewSet router
+router.register(r'boards/(?P<board_id>\d+)/members', BoardMembersViewSet, basename='board-members')
 
 urlpatterns = [
     path('', include(router.urls)),

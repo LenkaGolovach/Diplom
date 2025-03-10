@@ -34,6 +34,7 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
+FRONTEND_URL = 'http://localhost:8080'
 
 # Application definition
 

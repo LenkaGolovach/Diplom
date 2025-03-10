@@ -17,7 +17,10 @@ from django.utils.decorators import method_decorator
 import secrets
 from django.shortcuts import get_object_or_404
 from django.db import transaction
+import uuid
 from rest_framework.exceptions import PermissionDenied
+from django.conf import settings
+from django.db.models import Q
 
 logger = logging.getLogger(__name__) 
 
@@ -27,11 +30,17 @@ class BoardViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        queryset = Board.objects.all()
+        user = self.request.user
         invite_token = self.request.query_params.get('invite_token', None)
+        
+        # If invite token is provided, return only that specific board
         if invite_token:
-            queryset = queryset.filter(invite_token=invite_token)
-        return queryset
+            return Board.objects.filter(invite_token=invite_token)
+        
+        # Otherwise return boards where user is either owner or member
+        return Board.objects.filter(
+            Q(owner=user) | Q(members__user=user)
+        ).distinct()
 
     def perform_create(self, serializer):
         board = serializer.save(owner=self.request.user)
@@ -46,10 +55,18 @@ class BoardViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def generate_invite(self, request, pk=None):
         board = self.get_object()
-        token = secrets.token_urlsafe(32)
-        board.invite_token = token
-        board.save()
-        return Response({'invite_link': f'{settings.FRONTEND_URL}/invite/{token}/'})
+        if board.owner != request.user:
+            return Response(
+                {'error': 'Только владелец может генерировать ссылки'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        with transaction.atomic():
+            board.invite_token = uuid.uuid4()
+            board.save()
+            return Response({
+                'invite_link': f'{settings.FRONTEND_URL}/invite/{board.invite_token}/'
+            })
 
     @action(detail=True, methods=['post'])
     def join(self, request, pk=None):
@@ -66,13 +83,31 @@ class BoardMembersViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        board_id = self.kwargs['board_id']
+        board_id = self.kwargs.get('board_id')
         return BoardMember.objects.filter(board_id=board_id)
 
     def perform_destroy(self, instance):
+        board = instance.board
         if instance.role == 'owner':
             raise PermissionDenied("Нельзя удалить владельца")
+        # Check if the current user is the owner of the board
+        if board.owner != self.request.user:
+            raise PermissionDenied("Только владелец доски может удалять участников")
         instance.delete()
+
+    @action(detail=False, methods=['get'])
+    def get_by_email(self, request, board_id=None):
+        email = request.query_params.get('email')
+        if not email:
+            return Response({"error": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            user = CustomUser.objects.get(email=email)
+            member = BoardMember.objects.get(board_id=board_id, user=user)
+            serializer = self.get_serializer(member)
+            return Response(serializer.data)
+        except (CustomUser.DoesNotExist, BoardMember.DoesNotExist):
+            return Response({"error": "Member not found"}, status=status.HTTP_404_NOT_FOUND)
 
 # ViewSet для колонок
 class ColumnViewSet(viewsets.ModelViewSet):

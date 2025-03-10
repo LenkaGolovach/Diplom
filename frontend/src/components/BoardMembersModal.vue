@@ -11,7 +11,7 @@
             <span class="role">{{ member.role }}</span>
           </div>
           <button 
-            v-if="isOwner && member.role !== 'owner'" 
+            v-if="isOwner && member.email !== currentUser.email" 
             @click="removeMember(member)"
             class="remove-btn"
           >
@@ -20,7 +20,7 @@
         </div>
       </div>
 
-      <div v-if="isOwner" class="invite-section">
+      <div class="invite-section">
         <button @click="generateInviteLink" class="invite-btn">
           Сгенерировать ссылку приглашения
         </button>
@@ -50,12 +50,11 @@ export default {
   },
   computed: {
     members() {
+      // Access members through the correct property based on the API response
       return this.board.members || [];
     },
     isOwner() {
-      return this.members.some(m => 
-        m.user.email === this.currentUser.email && m.role === 'owner'
-      );
+      return this.currentUser && this.board.owner === this.currentUser.email;
     }
   },
   methods: {
@@ -77,8 +76,15 @@ export default {
     },
     async removeMember(member) {
       try {
+        // Find the member ID from the board's members list
+        const memberId = this.getMemberIdByEmail(member.email);
+        if (!memberId) {
+          console.error('Не удалось найти ID участника');
+          return;
+        }
+        
         await axios.delete(
-          `/api/boards/${this.board.id}/members/${member.id}/`,
+          `/api/boards/${this.board.id}/members/${memberId}/`,
           { 
             headers: { 
               Authorization: `Bearer ${localStorage.getItem('token')}` 
@@ -88,6 +94,21 @@ export default {
         this.$emit('update-members');
       } catch (error) {
         console.error('Ошибка удаления участника:', error);
+      }
+    },
+    async getMemberIdByEmail(email) {
+      try {
+        const response = await axios.get(
+          `/api/boards/${this.board.id}/members/get_by_email/`,
+          {
+            params: { email },
+            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+          }
+        );
+        return response.data.id;
+      } catch (error) {
+        console.error('Ошибка получения ID участника:', error);
+        return null;
       }
     },
     copyLink() {
