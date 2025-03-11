@@ -157,6 +157,7 @@ export default {
           this.$emit('update-tasks', this.tasks);
         } catch (error) {
           console.error('Ошибка добавления задачи в колонку:', error);
+          this.tasks = this.tasks.slice().reverse();
         }
       }
     },

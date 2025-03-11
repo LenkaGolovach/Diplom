@@ -21,6 +21,7 @@ import uuid
 from rest_framework.exceptions import PermissionDenied
 from django.conf import settings
 from django.db.models import Q
+from .permissions import IsBoardMember
 
 logger = logging.getLogger(__name__) 
 
@@ -157,11 +158,13 @@ class ColumnViewSet(viewsets.ModelViewSet):
 # ViewSet для задач
 class TaskViewSet(viewsets.ModelViewSet):
     serializer_class = TaskSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsBoardMember]
     parser_classes = (MultiPartParser, JSONParser)
 
     def get_queryset(self):
-        return Task.objects.filter(column__board__owner=self.request.user).prefetch_related('subtasks', 'attachments')
+        return Task.objects.filter(
+            column__board__members__user=self.request.user  # Проверяем, что пользователь в списках участников доски
+        ).prefetch_related('subtasks', 'attachments')
 
     def get_serializer_context(self):
         context = super().get_serializer_context()

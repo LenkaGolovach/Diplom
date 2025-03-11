@@ -186,11 +186,12 @@ __pycache__/
 *.sqlite3
 
 # Игнорировать миграции
-*/migrations/*
+backend/api/migrations/
 !*/migrations/__init__.py
 
 # Игнорировать папку с медиафайлами
-backend/media/
+backend/api/media/avatars/
+backend/api/media/attachments/
 
 # Игнорировать файлы окружения
 .env
