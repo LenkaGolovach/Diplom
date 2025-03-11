@@ -190,8 +190,8 @@ backend/api/migrations/
 !*/migrations/__init__.py
 
 # Игнорировать папку с медиафайлами
-backend/api/media/avatars/
-backend/api/media/attachments/
+backend/media/avatars/
+backend/media/attachments/
 
 # Игнорировать файлы окружения
 .env
