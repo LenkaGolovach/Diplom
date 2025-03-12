@@ -154,6 +154,7 @@ export default {
         subtasks: Array.isArray(this.task.subtasks) ? [...this.task.subtasks] : [],
         files: Array.isArray(this.task.attachments) ? [...this.task.attachments] : [],
         column: this.task.column,
+        members: Array.isArray(this.task.members) ? [...this.task.members] : [],
       },
       uploadedFiles: [],
       deletedFileIds: [],
@@ -376,7 +377,11 @@ export default {
             Authorization: `Bearer ${localStorage.getItem('token')}`,
           },
         });
-        this.localTask = response.data;
+        this.localTask = {
+          ...response.data,
+          // Map attachments to files to maintain consistency
+          files: response.data.attachments || []
+        };
       } catch (error) {
         console.error('Ошибка загрузки данных задачи:', error);
       }
