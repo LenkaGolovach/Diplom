@@ -1,7 +1,7 @@
 <template>
   <div class="invite-view">
     <div class="invite-card">
-      <h2 class="invite-title">Приглашение в доску</h2>
+      <h2 class="invite-title">Приглашение в проект</h2>
       
       <div v-if="board" class="board-info">
         <h3 class="board-name">{{ board.name }}</h3>

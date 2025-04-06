@@ -1,7 +1,7 @@
 <template>
   <div class="boards-list">
     <div class="header">
-      <h1>Мои доски</h1>
+      <h1>Мои проекты</h1>
       <button class="add-board-button" @click="showCreateModal">+ Создать доску</button>
       <button class="logout-button" @click="logout">Выйти</button>
     </div>

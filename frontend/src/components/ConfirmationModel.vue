@@ -54,7 +54,7 @@ export default {
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 1000;
+  z-index: 1001;
 }
 
 .modal-content {
@@ -63,6 +63,7 @@ export default {
   border-radius: 8px;
   width: 400px;
   max-width: 90%;
+  z-index: 1002;
 }
 
 .modal-actions {

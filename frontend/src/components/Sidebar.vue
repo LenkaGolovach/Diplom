@@ -10,7 +10,7 @@
         <span class="icon">👤</span> Профиль
       </router-link>
       <router-link to="/boards" class="menu-item">
-        <span class="icon">📋</span> Доски
+        <span class="icon">📋</span> Проекты
       </router-link>
     </nav>
 

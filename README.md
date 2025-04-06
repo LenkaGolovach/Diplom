@@ -24,7 +24,7 @@ cd backend
 ### Создайте виртуальное окружение и активируйте его:
 
 ```bash
-python -m venv venv
+python -m venv .venv
 source .venv/bin/activate  # Для Windows: .venv\Scripts\activate
 ```
 
@@ -41,7 +41,7 @@ pip install -r requirements.txt
 Создайте базу данных и примените миграции:
 
 ```bash
-python manage.py makemigrations
+python manage.py makemigrations api
 python manage.py migrate
 ```
 
