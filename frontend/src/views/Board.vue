@@ -17,9 +17,14 @@
           @keyup.enter="stopEditingBoardName"
           class="board-title-input"
         />
-        <button @click="showMembersModal = true" class="members-button">
-          👥 Участники
-        </button>
+        <div class="header-buttons">
+          <button @click="showMembersModal = true" class="members-button">
+            👥 Участники
+          </button>
+          <button class="add-column-button" @click="addColumn">
+            + Добавить колонку
+          </button>
+        </div>
       </div>
     </div>
 
@@ -36,9 +41,6 @@
           @openTaskModal="openModal"
         />
       </div>
-      <button class="add-column-button" @click="addColumn">
-        + Добавить колонку
-      </button>
     </div>
 
     <TaskModal
@@ -315,75 +317,105 @@ export default {
 
 <style scoped>
 .board {
+  height: 100vh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  padding: 16px;
 }
 
 .board-header {
-  margin-bottom: 16px;
+  padding: 16px 20px;
+  background: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .board-title-wrapper {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 15px;
+}
+
+.header-buttons {
+  display: flex;
+  gap: 12px;
+  align-items: center;
 }
 
 .board-title {
-  max-width: 200px;
-  font-size: 24px;
-  font-weight: bold;
-  cursor: pointer;
-  padding: 8px;
+  font-size: 20px;
+  font-weight: 600;
+  padding: 4px 8px;
   border-radius: 4px;
+  cursor: pointer;
 }
 
 .board-title:hover {
-  background: #ecedf0;
+  background: rgba(0, 0, 0, 0.05);
 }
 
 .board-title-input {
-  font-size: 24px;
-  font-weight: bold;
-  width: 100%;
-  padding: 8px;
+  font-size: 20px;
+  font-weight: 600;
+  padding: 4px 8px;
   border: 2px solid #0079bf;
   border-radius: 4px;
-  outline: none;
+  width: 200px;
 }
 
 .columns-container {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
+  flex: 1;
+  overflow-x: auto;
+  padding: 20px;
 }
 
 .columns {
   display: flex;
-  gap: 16px;
+  flex-wrap: wrap;
+  gap: 20px;
+  align-items: flex-start;
+  padding-bottom: 20px;
 }
 
-.add-column-button {
-  background: #f0f0f0;
-  border: none;
-  color: #5e6c84;
+.members-button, .add-column-button {
   padding: 8px 16px;
-  border-radius: 4px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 500;
   cursor: pointer;
-  font-size: 14px;
-  min-width: 280px;
-}
-
-.add-column-button:hover {
-  background: #e0e0e0;
+  transition: background-color 0.2s;
 }
 
 .members-button {
-  background: #f0f0f0;
-  border: none;
-  padding: 8px 12px;
-  border-radius: 4px;
-  cursor: pointer;
+  background: #ebecf0;
+  color: #172b4d;
+}
+
+.members-button:hover {
+  background: #dfe1e6;
+}
+
+.add-column-button {
+  background: #0079bf;
+  color: white;
+}
+
+.add-column-button:hover {
+  background: #026aa7;
+}
+
+@media (max-width: 768px) {
+  .board-title-wrapper {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .header-buttons {
+    width: 100%;
+    justify-content: flex-end;
+  }
 }
 </style>
