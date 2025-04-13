@@ -214,6 +214,9 @@ body {
   color: #2c3e50;
   margin: 0;
   font-weight: 600;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  letter-spacing: 0.5px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .header-buttons {
@@ -227,11 +230,13 @@ body {
   border-radius: 12px;
   font-size: 16px;
   font-weight: 500;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
   cursor: pointer;
   transition: all 0.3s ease;
   display: flex;
   align-items: center;
   gap: 8px;
+  letter-spacing: 0.3px;
 }
 
 .add-board-button {

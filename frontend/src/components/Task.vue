@@ -96,104 +96,174 @@ export default {
 
 <style scoped>
 .task {
-  padding: 10px;
-  margin-bottom: 10px;
-  border: 1px solid #ddd;
-  border-radius: 3px;
-  background-color: #f9f9f9;
+  padding: 15px;
+  margin: 10px 5px;
+  border: none;
+  border-radius: 8px;
+  background-color: white;
   cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+}
+
+.task:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
 }
 
 .task-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
+  align-items: flex-start;
+  margin-bottom: 12px;
+  position: relative;
+}
+
+.task-header span {
+  font-weight: 600;
+  font-size: 15px;
+  color: #2c3e50;
+  line-height: 1.4;
+  word-break: break-word;
+  flex: 1;
+  padding-right: 10px;
+  letter-spacing: 0.2px;
 }
 
 .task-header button {
-  background: #ff6b6b;
+  background: transparent;
   border: none;
-  color: white;
-  padding: 5px 10px;
-  border-radius: 4px;
+  color: #bdc3c7;
+  font-size: 18px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
   cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+  margin-top: -5px;
+  margin-right: -5px;
 }
 
 .task-header button:hover {
-  background: #ff4c4c;
+  background: rgba(231, 76, 60, 0.1);
+  color: #e74c3c;
+  transform: rotate(90deg);
 }
 
 .progress-bar {
   width: 100%;
-  height: 8px;
-  background: #e0e0e0;
-  border-radius: 4px;
+  height: 6px;
+  background: #ecf0f1;
+  border-radius: 10px;
   overflow: hidden;
-  margin-bottom: 5px;
+  margin-bottom: 6px;
 }
 
 .progress {
   height: 100%;
-  background: #76c7c0;
-  transition: width 0.3s ease;
+  background: linear-gradient(to right, #5b9cff, #82c0ff);
+  transition: width 0.4s ease;
 }
 
 .progress-text {
-  font-size: 0.8em;
-  color: #555;
+  font-size: 0.75em;
+  color: #7f8c8d;
   text-align: right;
+  margin-bottom: 12px;
+  letter-spacing: 0.2px;
 }
 
 .file-previews {
   display: flex;
-  gap: 5px;
-  margin-left: auto;
-  padding-right: 10px;
+  gap: 6px;
+  margin: 5px 0;
+  flex-wrap: wrap;
 }
 
 .file-preview-badge {
-  width: 24px;
-  height: 24px;
-  border-radius: 4px;
-  background: #f0f0f0;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: #f8f9fa;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 0.8em;
   position: relative;
   cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid #ecf0f1;
+  overflow: hidden;
+}
+
+.file-preview-badge:hover {
+  transform: scale(1.1);
 }
 
 .file-preview-badge img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 4px;
+  border-radius: 6px;
 }
 
 .more-files {
   background: #e0e0e0;
-  padding: 0 5px;
-  border-radius: 4px;
+  padding: 0 8px;
+  border-radius: 6px;
   font-size: 0.8em;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  color: #7f8c8d;
 }
 
 .file-icon-img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain; /* Сохраняет пропорции */
+  width: 80%;
+  height: 80%;
+  object-fit: contain;
+}
+
+.task-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #f5f5f5;
 }
 
 .participants-preview {
   display: flex;
   gap: 5px;
-  margin-top: 10px;
 }
 
 .participant-avatar {
-  width: 25px;
-  height: 25px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.participant-avatar:hover {
+  transform: scale(1.15);
+  z-index: 2;
+}
+
+.participant-avatar:not(:first-child) {
+  margin-left: -12px;
 }
 
 .avatar {
@@ -204,13 +274,17 @@ export default {
 }
 
 .more-participants {
-  background: #e0e0e0;
-  width: 25px;
-  height: 25px;
+  background: #f0f0f0;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.8em;
+  font-size: 0.75em;
+  color: #7f8c8d;
+  margin-left: -12px;
+  border: 2px solid white;
+  font-weight: 600;
 }
 </style>

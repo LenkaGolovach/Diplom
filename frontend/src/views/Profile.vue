@@ -1,39 +1,44 @@
 <template>
   <div class="profile-page">
-    <h1>Профиль пользователя</h1>
-    
-    <div v-if="loading" class="loading">
-      Loading...
-    </div>
-    
-    <div v-else class="profile-section">
-      <div class="avatar-section">
-        <img :src="avatarUrl" class="avatar" alt="Avatar">
-        <button class="change-avatar-btn" @click="changeAvatar">
-          Сменить аватар
-        </button>
-        <input type="file" hidden ref="avatarInput" @change="uploadAvatar" accept="image/*">
+    <div class="profile-container">
+      <h1 class="profile-title">Профиль пользователя</h1>
+      
+      <div v-if="loading" class="loading">
+        <div class="spinner"></div>
+        <span>Загрузка данных...</span>
       </div>
-
-      <div class="form-section">
-        <div class="form-group">
-          <label>Имя</label>
-          <input v-model="userData.first_name" type="text">
+      
+      <div v-else class="profile-section">
+        <div class="avatar-section">
+          <div class="avatar-container">
+            <img :src="avatarUrl" class="avatar" alt="Avatar">
+          </div>
+          <button class="change-avatar-btn" @click="changeAvatar">
+            <span class="btn-icon">📷</span> Сменить аватар
+          </button>
+          <input type="file" hidden ref="avatarInput" @change="uploadAvatar" accept="image/*">
         </div>
 
-        <div class="form-group">
-          <label>Фамилия</label>
-          <input v-model="userData.last_name" type="text">
-        </div>
+        <div class="form-section">
+          <div class="form-group">
+            <label>Имя</label>
+            <input v-model="userData.first_name" type="text" placeholder="Введите имя">
+          </div>
 
-        <div class="form-group">
-          <label>Email</label>
-          <input v-model="userData.email" type="email" readonly>
-        </div>
+          <div class="form-group">
+            <label>Фамилия</label>
+            <input v-model="userData.last_name" type="text" placeholder="Введите фамилию">
+          </div>
 
-        <button class="save-btn" @click="saveProfile" :disabled="saving">
-          {{ saving ? 'Сохранение...' : 'Сохранить' }}
-        </button>
+          <div class="form-group">
+            <label>Email</label>
+            <input v-model="userData.email" type="email" readonly>
+          </div>
+
+          <button class="save-btn" @click="saveProfile" :disabled="saving">
+            <span class="btn-icon">💾</span> {{ saving ? 'Сохранение...' : 'Сохранить' }}
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -132,91 +137,260 @@ export default {
 
 <style scoped>
 .profile-page {
-  max-width: 800px;
-  margin: 20px auto;
-  padding: 20px;
+  min-height: 100vh;
+  width: 100%;
+  padding: 40px 20px;
+  background: linear-gradient(135deg, 
+    #ffffff 0%,
+    #fff5f5 25%,
+    #f8f7ff 50%,
+    #fff5f5 75%,
+    #ffffff 100%
+  );
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow-y: auto;
+}
+
+.profile-container {
+  max-width: 900px;
+  margin: 0 auto;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 16px;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  padding: 40px;
+  animation: fadeIn 0.5s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.profile-title {
+  font-size: 2.5em;
+  color: #2c3e50;
+  margin: 0 0 30px 0;
+  font-weight: 600;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  letter-spacing: 0.5px;
+  text-align: center;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .loading {
-  text-align: center;
-  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 50px;
   font-size: 18px;
-  color: #666;
+  color: #5e6c84;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(91, 156, 255, 0.2);
+  border-left-color: #5b9cff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 15px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .profile-section {
   display: flex;
-  gap: 40px;
-  margin-top: 30px;
+  gap: 60px;
+  margin-top: 20px;
+  animation: slideUp 0.6s ease;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .avatar-section {
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 200px;
+  max-width: 220px;
+}
+
+.avatar-container {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  margin-bottom: 25px;
+  overflow: hidden;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  border: 4px solid white;
+  transition: all 0.3s ease;
+}
+
+.avatar-container:hover {
+  transform: scale(1.05);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
 }
 
 .avatar {
-  width: 150px;
-  height: 150px;
-  border-radius: 50%;
-  margin-bottom: 15px;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
-  border: 1px solid #ddd;
+  transition: all 0.3s ease;
 }
 
 .change-avatar-btn {
-  background: #007bff;
+  background: #5b9cff;
   color: white;
   border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
+  padding: 12px 20px;
+  border-radius: 8px;
   cursor: pointer;
+  font-size: 16px;
+  font-weight: 500;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 15px rgba(91, 156, 255, 0.3);
+  margin-bottom: 15px;
+}
+
+.change-avatar-btn:hover {
+  background: #4a8bff;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(91, 156, 255, 0.4);
+}
+
+.btn-icon {
+  margin-right: 8px;
+  font-size: 18px;
 }
 
 .form-section {
   flex: 1;
+  padding: 25px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  min-width: 280px;
+  max-width: 500px;
 }
 
 .form-group {
-  margin-bottom: 20px;
+  margin-bottom: 25px;
+  margin-right: 20px;
 }
 
 .form-group label {
   display: block;
-  margin-bottom: 5px;
+  margin-bottom: 8px;
   font-weight: 500;
+  color: #2c3e50;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  font-size: 16px;
+  letter-spacing: 0.3px;
 }
 
 .form-group input {
   width: 100%;
-  padding: 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  padding: 15px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 16px;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03);
+}
+
+.form-group input:focus {
+  border-color: #5a9bd4;
+  box-shadow: 0 0 0 3px rgba(90, 155, 212, 0.2);
+  outline: none;
 }
 
 .form-group input[readonly] {
   background-color: #f8f9fa;
   cursor: not-allowed;
+  color: #6c757d;
 }
 
 .save-btn {
-  background: #28a745;
+  background: #27ae60;
   color: white;
-  padding: 10px 20px;
+  padding: 14px 28px;
   border: none;
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
-  margin-top: 20px;
+  margin-top: 30px;
+  font-size: 16px;
+  font-weight: 500;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 15px rgba(39, 174, 96, 0.3);
+  letter-spacing: 0.3px;
+}
+
+.save-btn:hover {
+  background: #219653;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(39, 174, 96, 0.4);
 }
 
 .save-btn:disabled {
-  background: #6c757d;
+  background: #a0aec0;
+  transform: none;
+  box-shadow: none;
   cursor: not-allowed;
 }
 
 @media (max-width: 768px) {
+  .profile-container {
+    padding: 30px 20px;
+  }
+  
+  .profile-title {
+    font-size: 2em;
+  }
+  
   .profile-section {
     flex-direction: column;
-    gap: 20px;
+    gap: 30px;
+    align-items: center;
+  }
+  
+  .avatar-section {
+    min-width: auto;
+    max-width: 100%;
+  }
+  
+  .form-section {
+    min-width: 100%;
+  }
+  
+  .avatar-container {
+    width: 150px;
+    height: 150px;
   }
 }
 </style>

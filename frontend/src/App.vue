@@ -69,29 +69,46 @@ export default {
 <style>
 .menu-toggle {
   position: fixed;
-  top: 10px;
-  left: 10px;
+  top: 20px;
+  left: 20px;
   z-index: 1001;
-  padding: 10px;
-  background: #fff;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  padding: 12px;
+  width: 45px;
+  height: 45px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.9);
+  border: none;
+  border-radius: 12px;
   cursor: pointer;
-  transition: 0.3s;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  font-size: 18px;
+  color: #4a5568;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.menu-toggle:hover {
+  background: rgba(255, 255, 255, 1);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
 }
 
 .menu-toggle-shifted {
-  left: 260px;
+  left: 270px;
+  background: rgba(255, 255, 255, 0.95);
 }
 
 .content {
   margin-left: 0;
-  transition: 0.3s;
+  transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
   padding: 20px;
 }
 
 .content-shifted {
-  margin-left: 250px;
+  margin-left: 260px;
 }
 
 .fade-enter-active,

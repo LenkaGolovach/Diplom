@@ -21,163 +21,181 @@
         />
       </div>
 
-      <!-- Описание задачи -->
-      <div class="form-group">
-        <label>Описание:</label>
-        <textarea
-          v-model="localTask.description"
-          placeholder="Введите описание задачи"
-          class="description-input"
-        ></textarea>
-      </div>
-
-      <!-- Прогресс-бар (только если есть подзадачи) -->
-      <div v-if="hasSubtasks" class="progress-container">
-        <div class="progress-bar">
-          <div class="progress" :style="{ width: progress + '%' }"></div>
+      <!-- Основное содержимое с отступами -->
+      <div class="modal-body">
+        <!-- Описание задачи -->
+        <div class="form-group">
+          <label>Описание:</label>
+          <textarea
+            v-model="localTask.description"
+            placeholder="Введите описание задачи"
+            class="description-input"
+          ></textarea>
         </div>
-        <div class="progress-text">{{ progress }}% выполнено</div>
-      </div>
 
-      <!-- Кнопка добавления подзадачи -->
-      <button @click="addSubtask" class="add-subtask-button">
-        + Добавить подзадачу
-      </button>
-
-      <!-- Список подзадач -->
-      <div class="subtasks">
-        <div v-for="(subtask, index) in localTask.subtasks" :key="index" class="subtask">
-          <input
-            type="checkbox"
-            v-model="subtask.completed"
-            @change="updateProgress"
-          />
-          <div
-            class="subtask-title"
-            @dblclick="startEditingSubtask(index)"
-          >
-            <template v-if="!subtask.editing">
-              {{ subtask.name }}
-            </template>
-            <input
-              v-else
-              v-model="subtask.name"
-              @blur="stopEditingSubtask(index)"
-              @keyup.enter="stopEditingSubtask(index)"
-              class="subtask-input"
-            />
+        <!-- Прогресс-бар (только если есть подзадачи) -->
+        <div v-if="hasSubtasks" class="progress-container">
+          <div class="progress-bar">
+            <div class="progress" :style="{ width: progress + '%' }"></div>
           </div>
-          <button @click="deleteSubtask(index)" class="delete-subtask-button">
-            ×
+          <div class="progress-text">{{ progress }}% выполнено</div>
+        </div>
+
+        <!-- Кнопка добавления подзадачи -->
+        <button @click="addSubtask" class="add-subtask-button">
+          + Добавить подзадачу
+        </button>
+
+        <!-- Список подзадач -->
+        <div class="subtasks">
+          <div v-for="(subtask, index) in localTask.subtasks" :key="index" class="subtask">
+            <input
+              type="checkbox"
+              v-model="subtask.completed"
+              @change="updateProgress"
+            />
+            <div
+              class="subtask-title"
+              @dblclick="startEditingSubtask(index)"
+            >
+              <template v-if="!subtask.editing">
+                {{ subtask.name }}
+              </template>
+              <input
+                v-else
+                v-model="subtask.name"
+                @blur="stopEditingSubtask(index)"
+                @keyup.enter="stopEditingSubtask(index)"
+                class="subtask-input"
+              />
+            </div>
+            <button @click="deleteSubtask(index)" class="delete-subtask-button">
+              ×
+            </button>
+          </div>
+        </div>
+
+        <!-- Секция для прикрепленных файлов -->
+        <div class="file-section">
+          <label>Прикрепленные файлы:</label>
+          <div class="file-list">
+            <div v-for="(file, index) in localTask.files" :key="index" class="file-item">
+              <div class="file-preview" @click="downloadFile(file)">
+                <img v-if="isImage(file.type)" :src="file.url" class="thumbnail">
+                <div v-else class="file-icon">
+                  <img src="/icons/file-icon.png" alt="Document Icon" class="file-icon-img">
+                </div>
+              </div>
+              <div class="file-info">
+                <span class="file-name">{{ file.name }}</span>
+                <button @click="removeFile(index)" class="delete-file">×</button>
+              </div>
+            </div>
+          </div>
+          
+          <label class="file-upload">
+            <input 
+              ref="fileInput"
+              type="file" 
+              @change="handleFileUpload" 
+              multiple
+              class="file-input"
+            >
+            <span class="upload-button">+ Добавить файлы</span>
+          </label>
+        </div>
+
+        <!-- Секция участников -->
+        <div class="participants-section">
+          <label>Участники:</label>
+          <div class="participants-list">
+            <div 
+              v-for="member in localTask.members" 
+              :key="member.email"
+              class="participant"
+            >
+              <img 
+                :src="member.avatar || '/default-avatar.png'" 
+                class="avatar"
+              >
+              <span>{{ member.email }}</span>
+            </div>
+          </div>
+          <button 
+            @click="toggleParticipation"
+            :class="['participation-btn', { 'joined': isParticipant }]"
+            :disabled="!localTask.id"
+          >
+            {{ isParticipant ? 'Отказаться' : 'Присоединиться' }}
           </button>
         </div>
-      </div>
 
-      <!-- Секция для прикрепленных файлов -->
-      <div class="file-section">
-        <label>Прикрепленные файлы:</label>
-        <div class="file-list">
-          <div v-for="(file, index) in localTask.files" :key="index" class="file-item">
-            <div class="file-preview" @click="downloadFile(file)">
-              <img v-if="isImage(file.type)" :src="file.url" class="thumbnail">
-              <div v-else class="file-icon">
-                <img src="/icons/file-icon.png" alt="Document Icon" class="file-icon-img">
-              </div>
-            </div>
-            <div class="file-info">
-              <span class="file-name">{{ file.name }}</span>
-              <button @click="removeFile(index)" class="delete-file">×</button>
-            </div>
-          </div>
-        </div>
-        
-        <label class="file-upload">
-          <input 
-            ref="fileInput"
-            type="file" 
-            @change="handleFileUpload" 
-            multiple
-            class="file-input"
-          >
-          <span class="upload-button">+ Добавить файлы</span>
-        </label>
-      </div>
+        <!-- GitHub интеграция -->
+        <div class="github-section">
+          <label>GitHub интеграция:</label>
+          <div class="github-controls">
+            <select v-model="selectedGitHubAction" class="github-action-select">
+              <option value="">Выберите действие</option>
+              <option value="track-commits">Отслеживать коммиты</option>
+              <option value="repo-info">Информация о репозитории</option>
+              <option value="view-prs">Просмотр Pull Requests</option>
+            </select>
 
-      <!-- Секция участников -->
-      <div class="participants-section">
-        <label>Участники:</label>
-        <div class="participants-list">
-          <div 
-            v-for="member in localTask.members" 
-            :key="member.email"
-            class="participant"
-          >
-            <img 
-              :src="member.avatar || '/default-avatar.png'" 
-              class="avatar"
-            >
-            <span>{{ member.email }}</span>
-          </div>
-        </div>
-        <button 
-          @click="toggleParticipation"
-          :class="['participation-btn', { 'joined': isParticipant }]"
-          :disabled="!localTask.id"
-        >
-          {{ isParticipant ? 'Отказаться' : 'Присоединиться' }}
-        </button>
-      </div>
-
-      <!-- GitHub интеграция -->
-      <div class="github-section">
-        <label>GitHub интеграция:</label>
-        <div class="github-controls">
-          <select v-model="selectedGitHubAction" class="github-action-select">
-            <option value="">Выберите действие</option>
-            <option value="track-commits">Отслеживать коммиты</option>
-            <option value="repo-info">Информация о репозитории</option>
-            <option value="view-prs">Просмотр Pull Requests</option>
-          </select>
-
-          <!-- Выбор репозитория -->
-          <div v-if="selectedGitHubAction && !linkedRepo" class="github-content">
-            <div class="repo-selection">
-              <h4>Выберите репозиторий</h4>
-              
-              <!-- Вкладки -->
-              <div class="repo-tabs">
-                <button 
-                  :class="['tab-btn', { active: activeTab === 'search' }]"
-                  @click="activeTab = 'search'"
-                >
-                  Поиск
-                </button>
-                <button 
-                  :class="['tab-btn', { active: activeTab === 'recent' }]"
-                  @click="activeTab = 'recent'"
-                >
-                  Недавние
-                </button>
-                <button 
-                  :class="['tab-btn', { active: activeTab === 'link' }]"
-                  @click="activeTab = 'link'"
-                >
-                  Ссылка
-                </button>
-              </div>
-
-              <!-- Поиск репозиториев -->
-              <div v-if="activeTab === 'search'" class="tab-content">
-                <div class="search-container">
-                  <input 
-                    v-model="githubSearchQuery" 
-                    @input="searchGitHubRepos" 
-                    placeholder="Поиск репозиториев..."
-                    class="github-search-input"
+            <!-- Выбор репозитория -->
+            <div v-if="selectedGitHubAction && !linkedRepo" class="github-content">
+              <div class="repo-selection">
+                <h4>Выберите репозиторий</h4>
+                
+                <!-- Вкладки -->
+                <div class="repo-tabs">
+                  <button 
+                    :class="['tab-btn', { active: activeTab === 'search' }]"
+                    @click="activeTab = 'search'"
                   >
-                  <div v-if="searchResults.length" class="search-results">
+                    Поиск
+                  </button>
+                  <button 
+                    :class="['tab-btn', { active: activeTab === 'recent' }]"
+                    @click="activeTab = 'recent'"
+                  >
+                    Недавние
+                  </button>
+                  <button 
+                    :class="['tab-btn', { active: activeTab === 'link' }]"
+                    @click="activeTab = 'link'"
+                  >
+                    Ссылка
+                  </button>
+                </div>
+
+                <!-- Поиск репозиториев -->
+                <div v-if="activeTab === 'search'" class="tab-content">
+                  <div class="search-container">
+                    <input 
+                      v-model="githubSearchQuery" 
+                      @input="searchGitHubRepos" 
+                      placeholder="Поиск репозиториев..."
+                      class="github-search-input"
+                    >
+                    <div v-if="searchResults.length" class="search-results">
+                      <div 
+                        v-for="repo in searchResults" 
+                        :key="repo.id" 
+                        class="repo-item"
+                        @click="selectRepo(repo)"
+                      >
+                        <div class="repo-name">{{ repo.name }}</div>
+                        <div class="repo-description">{{ repo.description }}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Недавние репозитории -->
+                <div v-if="activeTab === 'recent'" class="tab-content">
+                  <div v-if="recentRepos.length" class="recent-repos">
                     <div 
-                      v-for="repo in searchResults" 
+                      v-for="repo in recentRepos" 
                       :key="repo.id" 
                       class="repo-item"
                       @click="selectRepo(repo)"
@@ -186,158 +204,143 @@
                       <div class="repo-description">{{ repo.description }}</div>
                     </div>
                   </div>
-                </div>
-              </div>
-
-              <!-- Недавние репозитории -->
-              <div v-if="activeTab === 'recent'" class="tab-content">
-                <div v-if="recentRepos.length" class="recent-repos">
-                  <div 
-                    v-for="repo in recentRepos" 
-                    :key="repo.id" 
-                    class="repo-item"
-                    @click="selectRepo(repo)"
-                  >
-                    <div class="repo-name">{{ repo.name }}</div>
-                    <div class="repo-description">{{ repo.description }}</div>
+                  <div v-else class="no-repos-message">
+                    Нет недавно использованных репозиториев
                   </div>
                 </div>
-                <div v-else class="no-repos-message">
-                  Нет недавно использованных репозиториев
-                </div>
-              </div>
 
-              <!-- Ввод ссылки -->
-              <div v-if="activeTab === 'link'" class="tab-content">
-                <div class="link-repo-container">
-                  <input 
-                    v-model="repoUrl" 
-                    placeholder="https://github.com/user/repo" 
-                    class="repo-url-input"
-                  >
-                  <button @click="linkRepository" class="link-repo-btn">
-                    Привязать
-                  </button>
+                <!-- Ввод ссылки -->
+                <div v-if="activeTab === 'link'" class="tab-content">
+                  <div class="link-repo-container">
+                    <input 
+                      v-model="repoUrl" 
+                      placeholder="https://github.com/user/repo" 
+                      class="repo-url-input"
+                    >
+                    <button @click="linkRepository" class="link-repo-btn">
+                      Привязать
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <!-- Содержимое в зависимости от выбранного действия -->
-          <div v-else-if="selectedGitHubAction && linkedRepo" class="github-content">
-            <!-- Отслеживание коммитов -->
-            <div v-if="selectedGitHubAction === 'track-commits'" class="action-content">
-              <div class="repo-header">
-                <div class="repo-info">
-                  <span class="repo-name">{{ linkedRepo.name }}</span>
-                  <button @click="changeRepo" class="change-repo-btn">
-                    Сменить репозиторий
+            <!-- Содержимое в зависимости от выбранного действия -->
+            <div v-else-if="selectedGitHubAction && linkedRepo" class="github-content">
+              <!-- Отслеживание коммитов -->
+              <div v-if="selectedGitHubAction === 'track-commits'" class="action-content">
+                <div class="repo-header">
+                  <div class="repo-info">
+                    <span class="repo-name">{{ linkedRepo.name }}</span>
+                    <button @click="changeRepo" class="change-repo-btn">
+                      Сменить репозиторий
+                    </button>
+                  </div>
+                  <button @click="refreshCommits" class="refresh-btn">
+                    🔄 Обновить
                   </button>
                 </div>
-                <button @click="refreshCommits" class="refresh-btn">
-                  🔄 Обновить
-                </button>
-              </div>
-              <div class="commits-list">
-                <div v-if="commits && commits.length > 0">
-                  <div 
-                    v-for="commit in commits" 
-                    :key="commit.sha" 
-                    class="commit-item"
-                    :class="{ 'error-commit': commit.sha.startsWith('error') }"
-                  >
-                    <div class="commit-header">
-                      <img :src="commit.author.avatar_url" class="author-avatar">
-                      <span class="author-name">{{ commit.author.name }}</span>
-                      <a 
-                        v-if="!commit.sha.startsWith('error')" 
-                        :href="commit.html_url" 
-                        target="_blank" 
-                        class="commit-link"
-                      >
-                        <i class="external-icon">↗</i>
-                      </a>
+                <div class="commits-list">
+                  <div v-if="commits && commits.length > 0">
+                    <div 
+                      v-for="commit in commits" 
+                      :key="commit.sha" 
+                      class="commit-item"
+                      :class="{ 'error-commit': commit.sha.startsWith('error') }"
+                    >
+                      <div class="commit-header">
+                        <img :src="commit.author.avatar_url" class="author-avatar">
+                        <span class="author-name">{{ commit.author.name }}</span>
+                        <a 
+                          v-if="!commit.sha.startsWith('error')" 
+                          :href="commit.html_url" 
+                          target="_blank" 
+                          class="commit-link"
+                        >
+                          <i class="external-icon">↗</i>
+                        </a>
+                      </div>
+                      <div class="commit-message">{{ commit.message }}</div>
+                      <div class="commit-date">{{ commit.author.date }}</div>
                     </div>
-                    <div class="commit-message">{{ commit.message }}</div>
-                    <div class="commit-date">{{ commit.author.date }}</div>
                   </div>
-                </div>
-                <div v-else class="empty-commits">
-                  <p>Коммиты не найдены. Попробуйте обновить.</p>
-                  <div v-if="commitsDebug" class="debug-info">
-                    <pre>{{ JSON.stringify(commitsDebug, null, 2) }}</pre>
+                  <div v-else class="empty-commits">
+                    <p>Коммиты не найдены. Попробуйте обновить.</p>
+                    <div v-if="commitsDebug" class="debug-info">
+                      <pre>{{ JSON.stringify(commitsDebug, null, 2) }}</pre>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <!-- Pull Requests -->
-            <div v-if="selectedGitHubAction === 'view-prs'" class="action-content">
-              <div class="repo-header">
-                <div class="repo-info">
-                  <span class="repo-name">{{ linkedRepo.name }}</span>
-                  <button @click="changeRepo" class="change-repo-btn">
-                    Сменить репозиторий
+              <!-- Pull Requests -->
+              <div v-if="selectedGitHubAction === 'view-prs'" class="action-content">
+                <div class="repo-header">
+                  <div class="repo-info">
+                    <span class="repo-name">{{ linkedRepo.name }}</span>
+                    <button @click="changeRepo" class="change-repo-btn">
+                      Сменить репозиторий
+                    </button>
+                  </div>
+                  <button @click="refreshPRs" class="refresh-btn">
+                    🔄 Обновить
                   </button>
                 </div>
-                <button @click="refreshPRs" class="refresh-btn">
-                  🔄 Обновить
-                </button>
-              </div>
-              <div class="prs-list">
-                <div 
-                  v-for="pr in pullRequests" 
-                  :key="pr.id" 
-                  class="pr-item"
-                >
-                  <div class="pr-title">{{ pr.title }}</div>
-                  <div class="pr-info">
-                    <span class="pr-author">{{ pr.user.login }}</span>
-                    <span class="pr-status" :class="pr.state">{{ pr.state }}</span>
+                <div class="prs-list">
+                  <div 
+                    v-for="pr in pullRequests" 
+                    :key="pr.id" 
+                    class="pr-item"
+                  >
+                    <div class="pr-title">{{ pr.title }}</div>
+                    <div class="pr-info">
+                      <span class="pr-author">{{ pr.user.login }}</span>
+                      <span class="pr-status" :class="pr.state">{{ pr.state }}</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <!-- Информация о репозитории (новая секция) -->
-            <div v-if="selectedGitHubAction === 'repo-info'" class="action-content">
-              <div class="repo-header">
-                <div class="repo-info">
-                  <span class="repo-name">{{ linkedRepo.name }}</span>
-                  <button @click="changeRepo" class="change-repo-btn">
-                    Сменить репозиторий
+              <!-- Информация о репозитории (новая секция) -->
+              <div v-if="selectedGitHubAction === 'repo-info'" class="action-content">
+                <div class="repo-header">
+                  <div class="repo-info">
+                    <span class="repo-name">{{ linkedRepo.name }}</span>
+                    <button @click="changeRepo" class="change-repo-btn">
+                      Сменить репозиторий
+                    </button>
+                  </div>
+                  <button @click="refreshRepoInfo" class="refresh-btn">
+                    🔄 Обновить
                   </button>
                 </div>
-                <button @click="refreshRepoInfo" class="refresh-btn">
-                  🔄 Обновить
-                </button>
-              </div>
-              <div class="repo-details">
-                <div class="repo-detail-item">
-                  <div class="detail-label">Владелец:</div>
-                  <div class="detail-value">{{ repoDetails.owner }}</div>
-                </div>
-                <div class="repo-detail-item">
-                  <div class="detail-label">Дата создания:</div>
-                  <div class="detail-value">{{ repoDetails.created_at || 'Н/Д' }}</div>
-                </div>
-                <div class="repo-detail-item">
-                  <div class="detail-label">Последнее обновление:</div>
-                  <div class="detail-value">{{ repoDetails.updated_at || 'Н/Д' }}</div>
-                </div>
-                <div class="repo-detail-item">
-                  <div class="detail-label">Звёзд:</div>
-                  <div class="detail-value">{{ repoDetails.stars || 0 }}</div>
-                </div>
-                <div class="repo-detail-item">
-                  <div class="detail-label">Форков:</div>
-                  <div class="detail-value">{{ repoDetails.forks || 0 }}</div>
-                </div>
-                <div class="repo-url-item">
-                  <div class="detail-label">URL:</div>
-                  <a :href="repoDetails.html_url" target="_blank" class="repo-link">
-                    {{ repoDetails.html_url }} <i class="external-icon">↗</i>
-                  </a>
+                <div class="repo-details">
+                  <div class="repo-detail-item">
+                    <div class="detail-label">Владелец:</div>
+                    <div class="detail-value">{{ repoDetails.owner }}</div>
+                  </div>
+                  <div class="repo-detail-item">
+                    <div class="detail-label">Дата создания:</div>
+                    <div class="detail-value">{{ repoDetails.created_at || 'Н/Д' }}</div>
+                  </div>
+                  <div class="repo-detail-item">
+                    <div class="detail-label">Последнее обновление:</div>
+                    <div class="detail-value">{{ repoDetails.updated_at || 'Н/Д' }}</div>
+                  </div>
+                  <div class="repo-detail-item">
+                    <div class="detail-label">Звёзд:</div>
+                    <div class="detail-value">{{ repoDetails.stars || 0 }}</div>
+                  </div>
+                  <div class="repo-detail-item">
+                    <div class="detail-label">Форков:</div>
+                    <div class="detail-value">{{ repoDetails.forks || 0 }}</div>
+                  </div>
+                  <div class="repo-url-item">
+                    <div class="detail-label">URL:</div>
+                    <a :href="repoDetails.html_url" target="_blank" class="repo-link">
+                      {{ repoDetails.html_url }} <i class="external-icon">↗</i>
+                    </a>
+                  </div>
                 </div>
               </div>
             </div>
@@ -840,20 +843,33 @@ export default {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.6);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 1001;
   padding: 20px;
   box-sizing: border-box;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from { transform: translateY(-20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
 .modal-content {
-  background: white;
-  padding: 20px 20px 0 20px; /* Убираем нижний padding */
-  border-radius: 8px;
-  width: 500px;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 0 0 0 0; /* Убираем все отступы контента */
+  border-radius: 12px;
+  width: 550px; /* Немного уменьшаем ширину */
   max-width: 90%; 
   max-height: 90vh;
   overflow-y: auto;
@@ -862,97 +878,144 @@ export default {
   display: flex;
   flex-direction: column;
   position: relative;
+  animation: slideIn 0.3s ease;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.1) transparent;
 }
 
 .task-header {
-  margin-bottom: 20px;
+  margin-bottom: 0;
   position: sticky;
   top: 0;
-  background: white;
-  padding: 5px 0;
+  background: rgba(91, 156, 255, 0.1);
+  padding: 20px 25px;
   z-index: 10;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 12px 12px 0 0;
 }
 
 .task-title {
-  font-size: 1.5em;
+  font-size: 1.8em;
   font-weight: bold;
   cursor: pointer;
   padding: 8px;
   border-radius: 4px;
-}
-
-.task-title:hover {
-  background: #f0f0f0;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  color: #2c3e50;
+  letter-spacing: 0.3px;
 }
 
 .task-title-input {
-  font-size: 1.5em;
+  font-size: 1.8em;
   font-weight: bold;
   width: 100%;
   padding: 8px;
-  border: 2px solid #0079bf;
-  border-radius: 4px;
-  margin-bottom: 15px;
-  margin-right: 40px;
+  border: 2px solid #5b9cff;
+  border-radius: 8px;
+  margin-bottom: 0;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+}
+
+/* Добавляем контейнер для основного содержимого с отступами */
+.modal-body {
+  padding: 20px 25px;
+}
+
+/* Обернем все внутреннее содержимое в контейнер */
+.form-group {
+  margin-bottom: 15px; /* Уменьшаем отступы */
+  padding-bottom: 15px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px; /* Уменьшаем отступы */
+  font-weight: 600;
+  color: #2c3e50;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  font-size: 15px;
+  letter-spacing: 0.2px;
 }
 
 .description-input {
   width: 100%;
-  min-height: 100px;
-  padding: 8px;
+  min-height: 80px; /* Уменьшаем высоту */
+  padding: 10px;
   border: 1px solid #ddd;
-  border-radius: 4px;
-  margin-bottom: 15px;
-  margin-right: 40px;
+  border-radius: 8px;
+  margin-bottom: 0;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  font-size: 14px;
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.02);
+  transition: all 0.3s ease;
+  resize: vertical;
+}
+
+.progress-container {
+  margin: 15px 0;
+  padding: 8px 0;
+}
+
+.progress-bar {
+  height: 8px;
+  background: #f1f5f9;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.progress {
+  height: 100%;
+  background: linear-gradient(to right, #5b9cff, #82c0ff);
+  transition: width 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+  border-radius: 20px;
+  box-shadow: 0 1px 2px rgba(91, 156, 255, 0.3);
+}
+
+.progress-text {
+  text-align: right;
+  font-size: 0.85em;
+  color: #64748b;
+  margin-top: 6px;
+  letter-spacing: 0.2px;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  font-weight: 500;
 }
 
 .add-subtask-button {
   width: 100%;
-  padding: 8px;
+  padding: 10px;
   background: #f0f0f0;
   border: none;
-  border-radius: 4px;
+  border-radius: 8px;
   margin: 10px 0;
   cursor: pointer;
-  transition: background-color 0.2s ease;
-}
-
-.add-subtask-button:hover {
-  background: #e0e0e0;
+  transition: all 0.3s ease;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  color: #4a5568;
 }
 
 .subtasks {
-  margin: 15px 0;
-  border: 1px solid #f0f0f0;
-  border-radius: 4px;
-  padding: 5px 10px;
+  margin: 10px 0;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+  padding: 8px 10px;
   display: flex;
   flex-direction: column;
   transition: all 0.3s ease;
-  min-height: 150px; /* Увеличенная минимальная высота */
-  /* max-height: 1600px; 400px * 4 = 1600px */
+  min-height: 120px; /* Уменьшаем минимальную высоту */
+  max-height: 250px; /* Ограничиваем максимальную высоту */
   overflow-y: auto;
-}
-
-/* Улучшаем стиль скроллбара для контейнера подзадач */
-.subtasks::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-.subtasks::-webkit-scrollbar-thumb {
-  background-color: #ccc;
-  border-radius: 3px;
-}
-
-.subtasks::-webkit-scrollbar-thumb:hover {
-  background-color: #aaa;
-}
-
-.subtasks::-webkit-scrollbar-track {
-  background-color: #f0f0f0;
-  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
 }
 
 .subtask {
@@ -960,154 +1023,172 @@ export default {
   align-items: center;
   margin-bottom: 8px;
   gap: 8px;
-  padding: 6px 4px;
+  padding: 8px 12px;
   min-height: 32px;
-  border-radius: 4px;
-  transition: background-color 0.2s ease;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .subtask:hover {
-  background-color: #f5f5f5;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
-/* Подсветка при редактировании */
-.subtask:has(.subtask-input) {
-  background-color: #f0f7ff;
-  border: 1px dashed #0079bf;
-  padding: 5px 3px; /* Компенсируем border */
-}
-
-/* Стиль для чекбокса */
 .subtask input[type="checkbox"] {
   width: 18px;
   height: 18px;
   cursor: pointer;
+  accent-color: #5b9cff;
 }
 
-/* Стиль для названия подзадачи */
 .subtask-title {
   flex: 1;
   cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 3px;
-  transition: background-color 0.2s ease;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c3e50;
+  letter-spacing: 0.2px;
 }
 
 .subtask-title:hover {
-  background-color: #e9e9e9;
+  background-color: rgba(0, 0, 0, 0.03);
 }
 
-/* Стиль для задач, отмеченных как выполненные */
 .subtask input[type="checkbox"]:checked + .subtask-title {
   text-decoration: line-through;
-  color: #888;
+  color: #94a3b8;
+  font-weight: 400;
 }
 
-/* Стиль для кнопки удаления подзадачи */
 .delete-subtask-button {
-  background: #ff6b6b;
+  background: none;
   border: none;
-  color: white;
-  padding: 4px 8px;
-  border-radius: 4px;
+  color: #cbd5e1;
+  font-size: 20px;
   cursor: pointer;
-  margin-left: 4px;
-  opacity: 0.7;
-  transition: opacity 0.2s ease;
+  padding: 4px;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  opacity: 0.5;
 }
 
-.delete-subtask-button:hover {
+.subtask:hover .delete-subtask-button {
   opacity: 1;
 }
 
-.form-group {
-  margin-bottom: 20px;
-  padding-bottom: 15px;
-  border-bottom: 1px solid #f0f0f0;
+.delete-subtask-button:hover {
+  background: rgba(231, 76, 60, 0.1);
+  color: #e74c3c;
+  transform: rotate(90deg);
 }
 
-.progress-container {
+.subtask-input {
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid #5b9cff;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(91, 156, 255, 0.1);
+}
+
+.file-section, .participants-section, .github-section {
   margin: 15px 0;
-  padding-bottom: 15px;
+  padding: 15px 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
 
-.progress-bar {
-  height: 8px;
-  background: #eee;
-  border-radius: 4px;
-  overflow: hidden;
+.file-list {
+  max-height: 150px; /* Уменьшаем максимальную высоту */
 }
 
-.progress {
-  height: 100%;
-  background: #76c7c0;
-  transition: width 0.3s ease;
-}
-
-.progress-text {
-  text-align: center;
-  font-size: 0.9em;
-  color: #666;
-  margin-top: 5px;
+.file-item {
+  padding: 8px;
+  margin-bottom: 8px;
 }
 
 .actions {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 15px;
   position: sticky;
   bottom: 0;
   left: 0;
   right: 0;
-  background: white;
-  padding: 15px 20px;
-  border-top: 1px solid #f0f0f0;
-  margin: 20px -20px 0 -20px; /* Негативные отступы по бокам */
-  border-radius: 0 0 8px 8px;
+  background: rgba(250, 250, 250, 0.95);
+  padding: 15px 25px;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  margin: 0;
+  border-radius: 0 0 12px 12px;
   z-index: 20;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 -5px 10px rgba(0, 0, 0, 0.02);
 }
 
 .save-button {
-  background: #76c7c0;
-  border: none;
+  background: #5b9cff;
   color: white;
-  padding: 8px 16px;
-  border-radius: 4px;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 8px;
   cursor: pointer;
+  font-size: 15px;
+  font-weight: 500;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(91, 156, 255, 0.3);
+  letter-spacing: 0.3px;
+}
+
+.save-button:hover {
+  background: #4a8bff;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(91, 156, 255, 0.4);
 }
 
 .close-button {
   background: #f0f0f0;
-  border: 1px solid #ccc;
-  padding: 8px 16px;
-  border-radius: 4px;
+  color: #4a5568;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
   cursor: pointer;
+  font-size: 15px;
+  font-weight: 500;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  transition: all 0.3s ease;
 }
 
-.file-section {
-  margin: 15px 0;
-  padding: 15px 0;
-  border-top: 1px solid #f0f0f0;
-  border-bottom: 1px solid #f0f0f0;
+.close-button:hover {
+  background: #e0e0e0;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
 }
 
-.file-list {
-  max-height: 200px;
-  overflow-y: auto;
-  border: 1px solid #f0f0f0;
-  border-radius: 4px;
-  padding: 5px;
-}
-
-.file-item {
-  display: flex;
-  align-items: center;
-  padding: 8px;
-  border: 1px solid #eee;
-  border-radius: 4px;
-  margin-bottom: 8px;
+.file-section label {
+  display: block;
+  margin-bottom: 15px;
+  font-weight: 600;
+  color: #2c3e50;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  font-size: 16px;
+  letter-spacing: 0.2px;
 }
 
 .file-preview {
@@ -1146,15 +1227,30 @@ export default {
   max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  color: #2c3e50;
 }
 
 .delete-file {
   background: none;
   border: none;
-  color: #ff6b6b;
+  color: #bdc3c7;
+  font-size: 22px;
   cursor: pointer;
-  font-size: 1.2em;
-  padding: 0 5px;
+  padding: 4px;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.delete-file:hover {
+  background: rgba(231, 76, 60, 0.1);
+  color: #e74c3c;
+  transform: rotate(90deg);
 }
 
 .file-upload {
@@ -1168,15 +1264,21 @@ export default {
 
 .upload-button {
   background: #f0f0f0;
-  padding: 8px 15px;
-  border-radius: 4px;
+  padding: 12px 20px;
+  border-radius: 8px;
   cursor: pointer;
   display: inline-block;
-  transition: background 0.3s;
+  transition: all 0.3s ease;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  color: #4a5568;
 }
 
 .upload-button:hover {
   background: #e0e0e0;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.07);
 }
 
 .file-icon-img {
@@ -1185,59 +1287,98 @@ export default {
   object-fit: contain; /* Сохраняет пропорции */
 }
 
-.participants-section {
-  margin: 15px 0;
-  padding: 15px 0;
-  border-bottom: 1px solid #f0f0f0;
+.participants-section label {
+  display: block;
+  margin-bottom: 15px;
+  font-weight: 600;
+  color: #2c3e50;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  font-size: 16px;
+  letter-spacing: 0.2px;
 }
 
 .participants-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin: 10px 0;
+  gap: 10px;
+  margin: 15px 0;
 }
 
 .participant {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px;
-  background: #f0f0f0;
-  border-radius: 15px;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+}
+
+.participant:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .avatar {
-  width: 25px;
-  height: 25px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.participant:hover .avatar {
+  transform: scale(1.05);
 }
 
 .participation-btn {
-  padding: 8px 15px;
-  background: #0079bf;
+  padding: 12px 20px;
+  background: #5b9cff;
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
+  font-size: 15px;
+  font-weight: 500;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(91, 156, 255, 0.3);
+  letter-spacing: 0.3px;
+}
+
+.participation-btn:hover {
+  background: #4a8bff;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(91, 156, 255, 0.4);
 }
 
 .participation-btn.joined {
-  background: #eb5a46;
+  background: #e74c3c;
+}
+
+.participation-btn.joined:hover {
+  background: #c0392b;
+  box-shadow: 0 6px 20px rgba(231, 76, 60, 0.4);
 }
 
 .participation-btn:disabled {
   background: #ccc;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
-.github-section {
-  margin-top: 20px;
-  padding: 15px;
-  background: #f6f8fa;
-  border-radius: 8px;
-  border: 1px solid #e1e4e8;
-  margin-bottom: 20px; /* Уменьшаем отступ, так как кнопки теперь sticky */
+.github-section label {
+  display: block;
+  margin-bottom: 15px;
+  font-weight: 600;
+  color: #2c3e50;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  font-size: 16px;
+  letter-spacing: 0.2px;
 }
 
 .github-controls {
@@ -1624,7 +1765,23 @@ export default {
   color: #999;
   align-self: center;
   padding: 0;
-  margin: auto; /* Центрирование по вертикали */
-  font-size: 16px; /* Увеличиваем размер шрифта */
+  margin: auto;
+  font-size: 16px;
+  letter-spacing: 0.2px;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+}
+
+/* Модификация скроллбаров для соответствия общему стилю */
+.modal-content::-webkit-scrollbar {
+  width: 5px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
 }
 </style>

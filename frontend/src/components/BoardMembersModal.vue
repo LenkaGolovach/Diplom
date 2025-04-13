@@ -1,13 +1,15 @@
 <template>
   <div class="modal-overlay" @click.self="$emit('close')">
     <div class="modal-content">
-      <h2>Участники доски</h2>
+      <h2 class="modal-title">Участники доски</h2>
       
       <div class="members-list">
         <div v-for="member in members" :key="member.email" class="member-item">
-          <img :src="member.avatar || '/default-avatar.png'" class="avatar">
+          <div class="avatar-wrapper">
+            <img :src="member.avatar || '/default-avatar.png'" class="avatar">
+          </div>
           <div class="member-info">
-            <span>{{ member.email }}</span>
+            <span class="member-email">{{ member.email }}</span>
             <span class="role">{{ member.role }}</span>
           </div>
           <button 
@@ -22,11 +24,11 @@
 
       <div class="invite-section">
         <button @click="generateInviteLink" class="invite-btn">
-          Сгенерировать ссылку приглашения
+          <span class="btn-icon">🔗</span> Сгенерировать ссылку приглашения
         </button>
         <div v-if="inviteLink" class="invite-link">
-          <input :value="inviteLink" readonly>
-          <button @click="copyLink">Копировать</button>
+          <input :value="inviteLink" readonly class="invite-input">
+          <button @click="copyLink" class="copy-btn">Копировать</button>
         </div>
       </div>
 
@@ -122,6 +124,12 @@ export default {
           console.error('Ошибка копирования:', err);
         });
     }
+  },
+  mounted() {
+    document.body.style.overflow = 'hidden';
+  },
+  beforeDestroy() {
+    document.body.style.overflow = 'auto';
   }
 };
 </script>
@@ -133,93 +141,284 @@ export default {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.6);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 1001;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from { transform: translateY(-20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
 .modal-content {
-  background: white;
-  padding: 2rem;
-  border-radius: 8px;
-  max-width: 500px;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 35px 30px;
+  border-radius: 12px;
+  max-width: 550px;
   width: 90%;
   max-height: 80vh;
   overflow-y: auto;
   position: relative;
   z-index: 1002;
+  animation: slideIn 0.3s ease;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.1) transparent;
+}
+
+.modal-content::-webkit-scrollbar {
+  width: 5px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+}
+
+.modal-title {
+  font-size: 1.8em;
+  font-weight: bold;
+  margin-bottom: 25px;
+  text-align: center;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  color: #2c3e50;
+  letter-spacing: 0.3px;
 }
 
 .close-btn {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 15px;
+  right: 15px;
   background: none;
   border: none;
-  font-size: 1.5rem;
+  font-size: 1.2rem;
   cursor: pointer;
+  padding: 8px 15px;
+  border-radius: 8px;
+  color: #4a5568;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  transition: all 0.3s ease;
+}
+
+.close-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  transform: translateY(-2px);
+}
+
+.members-list {
+  margin-bottom: 30px;
+  max-height: 300px;
+  overflow-y: auto;
   padding: 5px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.1) transparent;
+}
+
+.members-list::-webkit-scrollbar {
+  width: 5px;
+}
+
+.members-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.members-list::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
 }
 
 .member-item {
   display: flex;
   align-items: center;
   margin: 10px 0;
-  padding: 10px;
-  border-bottom: 1px solid #eee;
+  padding: 15px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.member-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.avatar-wrapper {
+  margin-right: 15px;
+  position: relative;
 }
 
 .avatar {
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
-  margin-right: 15px;
+  object-fit: cover;
+  border: 3px solid white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.member-item:hover .avatar {
+  transform: scale(1.05);
 }
 
 .member-info {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.member-email {
+  font-weight: 600;
+  color: #2c3e50;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  font-size: 15px;
+  letter-spacing: 0.2px;
 }
 
 .role {
   display: block;
-  font-size: 0.8em;
-  color: #666;
+  font-size: 0.85em;
+  color: #7f8c8d;
+  margin-top: 3px;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
 }
 
 .remove-btn {
   background: none;
   border: none;
-  color: #ff4444;
-  font-size: 1.2em;
+  color: #bdc3c7;
+  font-size: 22px;
   cursor: pointer;
-  padding: 5px;
+  padding: 4px;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.remove-btn:hover {
+  background: rgba(231, 76, 60, 0.1);
+  color: #e74c3c;
+  transform: rotate(90deg);
 }
 
 .invite-section {
-  margin-top: 20px;
+  margin-top: 25px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  animation: fadeIn 0.5s ease;
 }
 
 .invite-btn {
-  background: #0079bf;
+  background: #5b9cff;
   color: white;
   border: none;
-  padding: 10px;
-  border-radius: 4px;
+  padding: 12px 20px;
+  border-radius: 8px;
   cursor: pointer;
+  font-size: 15px;
+  font-weight: 500;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(91, 156, 255, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  letter-spacing: 0.3px;
+}
+
+.btn-icon {
+  margin-right: 8px;
+  font-size: 18px;
+}
+
+.invite-btn:hover {
+  background: #4a8bff;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(91, 156, 255, 0.4);
 }
 
 .invite-link {
-  margin-top: 10px;
+  margin-top: 15px;
   display: flex;
   gap: 10px;
+  animation: fadeIn 0.4s ease;
 }
 
-.invite-link input {
+.invite-input {
   flex: 1;
-  padding: 8px;
+  padding: 12px 15px;
   border: 1px solid #ddd;
-  border-radius: 4px;
+  border-radius: 8px;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  font-size: 14px;
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.02);
+  transition: all 0.3s ease;
+}
+
+.copy-btn {
+  background: #f0f0f0;
+  color: #4a5568;
+  padding: 12px 15px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.copy-btn:hover {
+  background: #e0e0e0;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.07);
+}
+
+@media (max-width: 768px) {
+  .modal-content {
+    width: 95%;
+    padding: 25px 20px;
+  }
+  
+  .member-item {
+    padding: 12px;
+  }
+  
+  .avatar {
+    width: 40px;
+    height: 40px;
+  }
+  
+  .invite-link {
+    flex-direction: column;
+  }
+  
+  .modal-title {
+    font-size: 1.5em;
+  }
 }
 </style>
