@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Board, Column, Task, SubTask, FileAttachment, CustomUser, BoardMember, TaskMember
+from .models import Board, Column, Task, SubTask, FileAttachment, CustomUser, BoardMember, TaskMember, MessageAttachment, Message
 import logging
 
 logger = logging.getLogger(__name__)
@@ -207,3 +207,41 @@ class BoardSerializer(serializers.ModelSerializer):
             "email": obj.owner.email,
             "avatar": obj.owner.avatar.url if obj.owner.avatar else None
         }
+
+class MessageAttachmentSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MessageAttachment
+        fields = ['id', 'name', 'url', 'content_type', 'uploaded_at']
+
+    def get_url(self, obj):
+        request = self.context.get('request')
+        return request.build_absolute_uri(obj.file.url)
+
+class MessageSerializer(serializers.ModelSerializer):
+    sender = UserSerializer(read_only=True)
+    attachments = MessageAttachmentSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = Message
+        fields = [
+            'id', 
+            'text', 
+            'attachments', 
+            'reply_to', 
+            'created_at',
+            'sender',  # Добавляем недостающее поле
+            'task'      # Если нужно отображать связанную задачу
+        ]
+        read_only_fields = ['id', 'created_at', 'sender', 'task']
+        extra_kwargs = {
+            'text': {'required': False, 'allow_blank': True},
+            'reply_to': {'required': False},
+            'task': {'read_only': True}  # Если task не должен передаваться в запросе
+        }
+
+    def validate(self, data):
+        if not data.get('text') and not self.context['request'].FILES:
+            raise serializers.ValidationError("Сообщение не может быть пустым")
+        return data

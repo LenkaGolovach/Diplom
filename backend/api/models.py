@@ -2,6 +2,7 @@ from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 import uuid
+from django.core.validators import FileExtensionValidator
 
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
@@ -123,3 +124,35 @@ class FileAttachment(models.Model):
 
     def __str__(self):
         return self.name
+
+class Message(models.Model):
+    id = models.AutoField(primary_key=True)  # Явное определение первичного ключа
+    task = models.ForeignKey(Task, related_name='messages', on_delete=models.CASCADE)
+    sender = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    text = models.TextField(blank=True, null=True)
+    reply_to = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+class MessageAttachment(models.Model):
+    message = models.ForeignKey(
+        Message, 
+        related_name='attachments', 
+        on_delete=models.CASCADE
+    )
+    file = models.FileField(
+        upload_to='message_attachments/',
+        validators=[FileExtensionValidator(allowed_extensions=['jpg', 'png', 'pdf', 'docx'])]
+    )
+    name = models.CharField(max_length=255)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    content_type = models.CharField(max_length=100)
+
+    def save(self, *args, **kwargs):
+        if not self.name:
+            self.name = self.file.name
+        if not self.content_type:
+            self.content_type = self.file.file.content_type
+        super().save(*args, **kwargs)

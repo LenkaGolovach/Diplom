@@ -5,13 +5,13 @@ from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from .models import Board, Column, Task
-from .serializers import BoardSerializer, ColumnSerializer, TaskSerializer, UserSerializer, BoardMemberSerializer, TaskMemberSerializer
-from .models import CustomUser, FileAttachment, BoardMember, TaskMember
+from .serializers import BoardSerializer, ColumnSerializer, TaskSerializer, UserSerializer, BoardMemberSerializer, TaskMemberSerializer, MessageSerializer, MessageAttachmentSerializer
+from .models import CustomUser, FileAttachment, BoardMember, TaskMember, Message, MessageAttachment
 import logging
 import json
 from django.contrib.auth import get_user_model
 from rest_framework.decorators import action
-from rest_framework.parsers import MultiPartParser, JSONParser
+from rest_framework.parsers import MultiPartParser, JSONParser, FormParser
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 import secrets
@@ -22,11 +22,14 @@ from rest_framework.exceptions import PermissionDenied
 from django.conf import settings
 from django.db.models import Q
 from .permissions import IsBoardMember
+from .permissions import IsTaskMember
+from django.db import IntegrityError
 
 logger = logging.getLogger(__name__) 
 
 # ViewSet для досок
 class BoardViewSet(viewsets.ModelViewSet):
+    lookup_url_kwarg = 'pk'
     serializer_class = BoardSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -277,3 +280,25 @@ class UserViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return CustomUser.objects.filter(id=self.request.user.id)
+
+class MessageViewSet(viewsets.ModelViewSet):
+    serializer_class = MessageSerializer
+    permission_classes = [permissions.IsAuthenticated, IsTaskMember]
+    parser_classes = (MultiPartParser,)
+    
+    # Добавьте явное определение queryset
+    queryset = Message.objects.all()
+    
+    def get_queryset(self):
+        task_pk = self.kwargs.get('task_pk')
+        return Message.objects.filter(task_id=task_pk).select_related('sender').prefetch_related('attachments')
+    
+    def create(self, request, *args, **kwargs):
+        try:
+            return super().create(request, *args, **kwargs)
+        except IntegrityError as e:
+            logger.error(f"Integrity error: {str(e)}")
+            return Response(
+                {"error": "Database integrity error"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )

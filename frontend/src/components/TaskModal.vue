@@ -130,6 +130,9 @@
           </button>
         </div>
 
+        <!-- Секция чата -->
+        <DiscussionChat v-if="localTask.id" :task-id="localTask.id" />
+
         <!-- GitHub интеграция -->
         <div class="github-section">
           <label>GitHub интеграция:</label>
@@ -360,8 +363,12 @@
 <script>
 import axios from 'axios';
 import GitHubService from '@/services/GitHubService';
+import DiscussionChat from '@/components/DiscussionChat.vue';
 
 export default {
+  components: {
+    DiscussionChat,
+  },
   props: {
     task: Object,
   },
