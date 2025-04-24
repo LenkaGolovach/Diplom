@@ -5,7 +5,7 @@ from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from .models import Board, Column, Task
-from .serializers import BoardSerializer, ColumnSerializer, TaskSerializer, UserSerializer, BoardMemberSerializer, TaskMemberSerializer, MessageSerializer, MessageAttachmentSerializer
+from .serializers import BoardSerializer, ColumnSerializer, TaskSerializer, UserSerializer, BoardMemberSerializer, TaskMemberSerializer, MessageSerializer, MessageAttachmentSerializer, MessageUpdateSerializer
 from .models import CustomUser, FileAttachment, BoardMember, TaskMember, Message, MessageAttachment
 import logging
 import json
@@ -24,6 +24,7 @@ from django.db.models import Q
 from .permissions import IsBoardMember
 from .permissions import IsTaskMember
 from django.db import IntegrityError
+from django.utils import timezone
 
 logger = logging.getLogger(__name__) 
 
@@ -284,9 +285,8 @@ class UserViewSet(viewsets.ModelViewSet):
 class MessageViewSet(viewsets.ModelViewSet):
     serializer_class = MessageSerializer
     permission_classes = [permissions.IsAuthenticated, IsTaskMember]
-    parser_classes = (MultiPartParser,)
+    parser_classes = (JSONParser, MultiPartParser, FormParser)
     
-    # Добавьте явное определение queryset
     queryset = Message.objects.all()
     
     def get_queryset(self):
@@ -306,3 +306,22 @@ class MessageViewSet(viewsets.ModelViewSet):
             sender=self.request.user,
             id=None  # Явное указание для автоинкремента
         )
+
+    def get_serializer_class(self):
+        if self.action == 'partial_update':
+            return MessageUpdateSerializer
+        return MessageSerializer
+
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.sender != request.user:
+            return Response({'error': 'Forbidden'}, status=403)
+        
+        serializer = self.get_serializer(
+            instance,
+            data=request.data,
+            partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save(is_edited=True, edited_at=timezone.now())
+        return Response(serializer.data)

@@ -236,6 +236,9 @@ class MessageSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True
     )
+    is_deleted = serializers.BooleanField(read_only=True)
+    is_edited = serializers.BooleanField(read_only=True)
+    edited_at = serializers.DateTimeField(read_only=True)
     
 
     class Meta:
@@ -243,7 +246,8 @@ class MessageSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'text', 'sender', 
             'reply_to', 'reply_to_id', 
-            'attachments', 'created_at'
+            'attachments', 'created_at',
+            'is_deleted', 'is_edited', 'edited_at'
         ]
         read_only_fields = ['id', 'created_at', 'sender', 'task']
 
@@ -286,3 +290,11 @@ class MessageSerializer(serializers.ModelSerializer):
                 }
             }
         return None
+
+class MessageUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Message
+        fields = ['text']
+        extra_kwargs = {
+            'text': {'required': True}
+        }
