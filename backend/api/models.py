@@ -31,13 +31,18 @@ class CustomUser(AbstractUser):
     email = models.EmailField(_('email address'), unique=True)
     avatar = models.ImageField(upload_to='avatars/', null=True, blank=True)  
 
+    name = models.CharField(_('full name'), max_length=255, blank=True)
+
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []
 
     objects = CustomUserManager()
 
     def __str__(self):
-        return self.email
+        return self.name or self.email
+
+    def get_full_name(self):
+        return f"{self.first_name} {self.last_name}".strip() or self.email
 
 class Board(models.Model):
     name = models.CharField(max_length=255)
@@ -126,11 +131,11 @@ class FileAttachment(models.Model):
         return self.name
 
 class Message(models.Model):
-    id = models.AutoField(primary_key=True)  # Явное определение первичного ключа
-    task = models.ForeignKey(Task, related_name='messages', on_delete=models.CASCADE)
+    id = models.BigAutoField(primary_key=True, editable=False)  # Явное определение
+    task = models.ForeignKey(Task, on_delete=models.CASCADE)
     sender = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
     text = models.TextField(blank=True, null=True)
-    reply_to = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True)
+    reply_to = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

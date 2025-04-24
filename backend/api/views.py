@@ -290,15 +290,19 @@ class MessageViewSet(viewsets.ModelViewSet):
     queryset = Message.objects.all()
     
     def get_queryset(self):
-        task_pk = self.kwargs.get('task_pk')
-        return Message.objects.filter(task_id=task_pk).select_related('sender').prefetch_related('attachments')
+        return Message.objects.filter(
+            task_id=self.kwargs['task_pk']
+        ).select_related(
+            'sender', 
+            'reply_to__sender'
+        ).prefetch_related(
+            'attachments'
+        ).order_by('created_at')
     
-    def create(self, request, *args, **kwargs):
-        try:
-            return super().create(request, *args, **kwargs)
-        except IntegrityError as e:
-            logger.error(f"Integrity error: {str(e)}")
-            return Response(
-                {"error": "Database integrity error"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
+    def perform_create(self, serializer):
+        task = get_object_or_404(Task, id=self.kwargs['task_pk'])
+        serializer.save(
+            task=task,
+            sender=self.request.user,
+            id=None  # Явное указание для автоинкремента
+        )

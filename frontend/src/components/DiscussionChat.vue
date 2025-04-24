@@ -21,12 +21,14 @@
           </div>
 
           <div class="message-body">
-            <template v-if="message.replyTo">
-              <div class="reply-preview">
-                <span class="reply-sender">@{{ message.replyTo.sender.name }}:</span>
-                <span class="reply-text">{{ message.replyTo.text }}</span>
-              </div>
-            </template>
+            <div class="reply-preview" v-if="message.reply_to">
+              <span class="reply-sender">
+                @{{ (message.reply_to.sender && message.reply_to.sender.name) || message.reply_to.sender.email || 'Неизвестный' }}:
+              </span>
+              <span class="reply-text">
+                {{ message.reply_to.text || 'вложение' }}
+              </span>
+            </div>
 
             <p class="text" v-if="message.text">
               {{ message.text }}
@@ -38,11 +40,24 @@
                 :key="idx"
                 class="attachment-item"
               >
-                <img v-if="isImage(file.type)" :src="file.url" class="attachment-img" />
-                <video v-else-if="isVideo(file.type)" controls class="attachment-video">
-                  <source :src="file.url" :type="file.type" />
+                <img 
+                  v-if="isImage(file.content_type)" 
+                  :src="file.url" 
+                  class="attachment-img" 
+                />
+                <video 
+                  v-else-if="isVideo(file.content_type)" 
+                  controls 
+                  class="attachment-video"
+                >
+                  <source :src="file.url" :type="file.content_type" />
                 </video>
-                <a v-else :href="file.url" target="_blank" class="attachment-file">
+                <a 
+                  v-else 
+                  :href="file.url" 
+                  target="_blank" 
+                  class="attachment-file"
+                >
                   {{ file.name }}
                 </a>
               </div>
@@ -62,7 +77,15 @@
         <button @click="cancelReply">×</button>
       </div>
 
+      <div v-if="attachments.length" class="selected-files">
+        <div v-for="(file, index) in attachments" :key="index" class="file-item">
+          <span class="file-name">{{ file.name }}</span>
+          <button @click="removeAttachment(index)" class="remove-file-btn">×</button>
+        </div>
+      </div>
+
       <textarea
+        ref="input"
         v-model="newMessage"
         placeholder="Напишите сообщение..."
         @keyup.enter.exact.prevent="sendMessage"
@@ -73,7 +96,10 @@
           📎
           <input type="file" multiple @change="handleAttachment" hidden>
         </label>
-        <button @click="sendMessage" :disabled="!newMessage.trim() && !attachments.length">
+        <button 
+          @click="sendMessage" 
+          :disabled="!isMessageValid"
+        >
           Отправить
         </button>
       </div>
@@ -96,22 +122,46 @@ export default {
       currentUser: this.$store.state.user
     };
   },
+  computed: {
+    isMessageValid() {
+      return this.newMessage.trim().length > 0 || this.attachments.length > 0;
+    }
+  },
   methods: {
     async fetchMessages() {
-      const { data } = await axios.get(`/api/tasks/${this.taskId}/messages/`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      });
-      this.messages = data;
-      this.scrollToBottom();
+      try {
+        const { data } = await axios.get(`/api/tasks/${this.taskId}/messages/`, {
+          params: {
+            expand: 'reply_to.sender,attachments'
+          },
+          headers: { 
+            Authorization: `Bearer ${localStorage.getItem('token')}` 
+          }
+        });
+        this.messages = data; 
+      } catch (error) {
+        console.error('Ошибка загрузки сообщений:', error);
+      }
     },
     formatTime(ts) {
       return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     },
-    isImage(type) { return type.startsWith('image/'); },
-    isVideo(type) { return type.startsWith('video/'); },
+    isImage(type) { 
+      return type && type.startsWith('image/');// Добавить опциональную цепочку
+    },
+    isVideo(type) {
+      return type && type.startsWith('video/');
+    },
     startReply(message) {
-      this.replyTo = message;
-      this.$nextTick(() => this.$refs.input.focus());
+      this.replyTo = {
+        id: message.id,
+        text: message.text || 'вложение',
+        sender: message.sender
+      };
+      this.$nextTick(() => {
+        this.$refs.input.focus();
+        this.$refs.input.scrollIntoView({ behavior: 'smooth' });
+      });
     },
     cancelReply() {
       this.replyTo = null;
@@ -120,22 +170,27 @@ export default {
       const files = Array.from(event.target.files);
       this.attachments.push(...files);
     },
+    removeAttachment(index) {
+      this.attachments.splice(index, 1);
+    },
     async sendMessage() {
       try {
         const form = new FormData();
         
+        // Добавляем текст сообщения
         if (this.newMessage.trim()) {
           form.append('text', this.newMessage);
         }
-        
-        if (this.replyTo) {
-          form.append('reply_to', this.replyTo.id);
-        }
-        
-        this.attachments.forEach(file => {
-          form.append('attachments', file);
-        });
 
+        // Добавляем ID сообщения для ответа
+        if (this.replyTo) {
+          form.append('reply_to_id', this.replyTo.id); 
+        }
+
+        // Добавляем вложения
+        this.attachments.forEach(file => {form.append('attachments', file); });
+
+        // Отправка запроса
         const response = await axios.post(
           `/api/tasks/${this.taskId}/messages/`,
           form,
@@ -147,11 +202,14 @@ export default {
           }
         );
 
-        this.messages.push(response.data);
+        // Обновляем список сообщений
+        await this.fetchMessages();
+        
+        // Сбрасываем состояние
         this.newMessage = '';
         this.attachments = [];
         this.replyTo = null;
-        
+
       } catch (error) {
         console.error('Ошибка отправки сообщения:', error.response && error.response.data);
         alert(`Ошибка: ${(error.response && error.response.data && error.response.data.error) || 'Неизвестная ошибка'}`);
@@ -166,7 +224,6 @@ export default {
   },
   mounted() {
     this.fetchMessages();
-    // можно подписаться на вебсокеты для реального времени
   }
 };
 </script>
@@ -232,13 +289,6 @@ export default {
 }
 .message-item.own .message-body {
   background: #5b9cff33;
-}
-.reply-preview {
-  border-left: 3px solid #5b9cff;
-  padding-left: 6px;
-  margin-bottom: 4px;
-  font-size: 13px;
-  color: #64748b;
 }
 .text {
   margin: 0;
@@ -319,5 +369,63 @@ export default {
 .input-actions button:disabled {
   background: #ccc;
   cursor: not-allowed;
+}
+
+.reply-preview {
+  border-left: 3px solid #4CAF50;
+  margin: 8px 0;
+  padding: 8px 12px;
+  background: #f5f5f5;
+  border-radius: 4px;
+}
+
+.reply-sender {
+  color: #2c3e50;
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+.reply-text {
+  color: #7f8c8d;
+  font-size: 0.85em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.selected-files {
+  margin-bottom: 8px;
+  max-width: 100%;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  background: #f0f0f0;
+  border-radius: 4px;
+  margin: 4px 0;
+  font-size: 0.9em;
+}
+
+.file-name {
+  flex-grow: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remove-file-btn {
+  background: none;
+  border: none;
+  color: #ff4444;
+  cursor: pointer;
+  margin-left: 8px;
+  padding: 0 4px;
+}
+
+.remove-file-btn:hover {
+  background: rgba(255, 68, 68, 0.1);
 }
 </style>

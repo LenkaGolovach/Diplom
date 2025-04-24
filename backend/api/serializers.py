@@ -210,38 +210,79 @@ class BoardSerializer(serializers.ModelSerializer):
 
 class MessageAttachmentSerializer(serializers.ModelSerializer):
     url = serializers.SerializerMethodField()
+    type = serializers.CharField(source='content_type') 
 
     class Meta:
         model = MessageAttachment
-        fields = ['id', 'name', 'url', 'content_type', 'uploaded_at']
+        fields = ['id', 'name', 'url', 'type', 'uploaded_at']
 
     def get_url(self, obj):
         request = self.context.get('request')
         return request.build_absolute_uri(obj.file.url)
 
-class MessageSerializer(serializers.ModelSerializer):
+class ReplyMessageSerializer(serializers.ModelSerializer):
     sender = UserSerializer(read_only=True)
-    attachments = MessageAttachmentSerializer(many=True, read_only=True)
     
     class Meta:
         model = Message
+        fields = ['id', 'text', 'sender', 'created_at']
+
+class MessageSerializer(serializers.ModelSerializer):
+    sender = UserSerializer(read_only=True)
+    attachments = MessageAttachmentSerializer(many=True, read_only=True)
+    reply_to = serializers.SerializerMethodField()
+    reply_to_id = serializers.IntegerField(
+        write_only=True,
+        required=False,
+        allow_null=True
+    )
+    
+
+    class Meta:
+        model = Message
         fields = [
-            'id', 
-            'text', 
-            'attachments', 
-            'reply_to', 
-            'created_at',
-            'sender',  # Добавляем недостающее поле
-            'task'      # Если нужно отображать связанную задачу
+            'id', 'text', 'sender', 
+            'reply_to', 'reply_to_id', 
+            'attachments', 'created_at'
         ]
         read_only_fields = ['id', 'created_at', 'sender', 'task']
-        extra_kwargs = {
-            'text': {'required': False, 'allow_blank': True},
-            'reply_to': {'required': False},
-            'task': {'read_only': True}  # Если task не должен передаваться в запросе
-        }
+
+    def create(self, validated_data):
+        reply_to_id = validated_data.pop('reply_to_id', None)
+        attachments_data = self.context['request'].FILES.getlist('attachments')
+
+        # Создаем сообщение
+        instance = Message.objects.create(**validated_data)
+
+        # Добавляем вложения
+        for file in attachments_data:
+            MessageAttachment.objects.create(
+                message=instance,
+                file=file,
+                name=file.name,
+                content_type=file.content_type
+            )
+
+        if reply_to_id:
+            instance.reply_to_id = reply_to_id
+            instance.save()
+
+        return instance
 
     def validate(self, data):
         if not data.get('text') and not self.context['request'].FILES:
             raise serializers.ValidationError("Сообщение не может быть пустым")
         return data
+
+    def get_reply_to(self, obj):
+        if obj.reply_to:
+            return {
+                "id": obj.reply_to.id,
+                "text": obj.reply_to.text,
+                "sender": {
+                    "id": obj.reply_to.sender.id,
+                    "name": obj.reply_to.sender.get_full_name(),
+                    "email": obj.reply_to.sender.email
+                }
+            }
+        return None
