@@ -152,6 +152,7 @@ export default {
       replyTo: null,
       currentUser: this.$store.state.user,
       editingMessage: null,
+      pollInterval: null,
     };
   },
   computed: {
@@ -169,17 +170,22 @@ export default {
     }
   },
   methods: {
+    startPolling() {
+      this.pollInterval = setInterval(() => {
+        this.fetchMessages();
+      }, 3000); // Опрашиваем сервер каждые 3 секунды
+    },
     async fetchMessages() {
       try {
         const { data } = await axios.get(`/api/tasks/${this.taskId}/messages/`, {
-          params: {
-            expand: 'reply_to.sender,attachments'
-          },
-          headers: { 
-            Authorization: `Bearer ${localStorage.getItem('token')}` 
-          }
+          params: { expand: 'reply_to.sender,attachments' },
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
         });
-        this.messages = data;
+        
+        // Обновляем только если есть изменения
+        if (JSON.stringify(this.messages) !== JSON.stringify(data)) {
+          this.messages = data;
+        }
       } catch (error) {
         console.error('Ошибка загрузки сообщений:', error);
       }
@@ -330,7 +336,11 @@ export default {
   },
   mounted() {
     this.fetchMessages();
-  }
+    this.startPolling();
+  },
+  beforeUnmount() {
+    clearInterval(this.pollInterval);
+  },
 };
 </script>
 
