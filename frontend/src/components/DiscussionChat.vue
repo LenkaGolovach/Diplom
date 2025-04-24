@@ -78,7 +78,9 @@
             </div>
 
             <div class="message-actions">
-              <button @click="startReply(message)">Ответить</button>
+              <button @click="startReply(message)">
+                <img src="/icons/reply-icon.png" class="action-icon">
+              </button>
               <button @click="editMessage(message)" v-if="message.sender.id === currentUser.id">
                 <img src="/icons/edit-icon.png" class="action-icon">
               </button>
@@ -154,7 +156,7 @@ export default {
   },
   computed: {
     isMessageValid() {
-      return this.newMessage.trim().length > 0 || this.attachments.length > 0;
+      return (this.newMessage && this.newMessage.trim().length > 0) || this.attachments.length > 0;
     },
     groupedMessages() {
       const groups = {}
@@ -225,7 +227,24 @@ export default {
         if (this.editingMessage) {
           // Режим редактирования
           const form = new FormData();
-          form.append('text', this.newMessage.trim());
+      
+          // Сохраняем текст даже если он пустой
+          form.append('text', this.newMessage ? this.newMessage.trim() : '');
+          
+          // Добавляем существующие вложения
+          this.attachments.forEach(file => {
+            if (file instanceof File) {
+              form.append('attachments', file);
+            } else {
+              // Для уже загруженных файлов
+              form.append('keep_attachments', file.id);
+            }
+          });
+          
+          // Сохраняем ответ если был
+          if (this.replyTo) {
+            form.append('reply_to_id', this.replyTo.id);
+          }
           
           await axios.patch(
             `/api/tasks/${this.taskId}/messages/${this.editingMessage.id}/`,
@@ -289,9 +308,17 @@ export default {
     editMessage(message) {
       if (message.is_deleted) return;
       this.editingMessage = message;
-      this.newMessage = message.text;
-      this.replyTo = null;
-      this.attachments = [];
+      this.newMessage = message.text || '';
+      
+      // Сохраняем оригинальные вложения и ответ
+      this.replyTo = message.reply_to 
+        ? {...message.reply_to} 
+        : null;
+        
+      this.attachments = message.attachments.length
+        ? [...message.attachments] // Копируем вложения
+        : [];
+      
       this.$refs.input.focus();
     },
     scrollToBottom() {
@@ -350,6 +377,10 @@ export default {
   flex-direction: row-reverse;
 }
 
+.message-item.own .message-content {
+  margin-left: auto;
+}
+
 .avatar img {
   width: 40px;
   height: 40px;
@@ -358,8 +389,9 @@ export default {
 }
 
 .message-content {
-  max-width: 70%;
+  max-width: 75%;
   min-width: 200px;
+  position: relative;
 }
 
 .message-header {
@@ -450,24 +482,57 @@ export default {
 
 .message-actions {
   position: absolute;
-  right: -30px;
-  top: 0;
+  top: -10px;
   display: flex;
-  gap: 5px;
+  gap: 3px;
   opacity: 0;
   transition: opacity 0.2s;
+  background: white;
+  padding: 3px;
+  border-radius: 15px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  z-index: 1;
+}
+
+.message-item .message-actions {
+  right: -15px;
+}
+
+.message-item:not(.own) .message-actions {
+  left: -5px;
+  right: auto;
+}
+
+.message-item:not(.own) .message-actions {
+  flex-direction: row-reverse;
 }
 
 .message-item:hover .message-actions {
   opacity: 1;
 }
 
+.message-item.own .message-actions {
+  background: #e3f2fd;
+  box-shadow: 0 3px 3px rgba(0,0,0,0.1);
+}
+
+/* Уменьшаем отступы для компактности */
+.message-actions button {
+  padding: 0;
+  line-height: 1;
+}
+
+/* Фикс выравнивания иконок */
+.message-actions button img {
+  vertical-align: middle;
+}
+
 .action-icon {
-  width: 20px;
-  height: 20px;
-  cursor: pointer;
-  opacity: 0.6;
-  transition: opacity 0.2s;
+  width: 16px;
+  height: 16px;
+  padding: 4px;
+  transition: all 0.2s;
+  display: block;
 }
 
 .action-icon:hover {
@@ -483,6 +548,7 @@ export default {
   padding: 15px;
   border-top: 1px solid #dee2e6;
   background: #fff;
+  box-sizing: border-box;
 }
 
 .replying-to {
@@ -516,12 +582,14 @@ export default {
 }
 
 textarea {
-  width: 100%;
+  width: calc(100% - 24px); /* Учитываем padding */
   padding: 12px;
   border: 1px solid #dee2e6;
   border-radius: 8px;
   resize: none;
   min-height: 80px;
+  margin: 0;
+  box-sizing: border-box;
 }
 
 .input-actions {
@@ -538,16 +606,31 @@ textarea {
 }
 
 button[type="submit"] {
-  background: #007bff;
+  background: linear-gradient(135deg, #007bff, #0056b3);
   color: white;
-  padding: 8px 20px;
-  border-radius: 20px;
+  padding: 10px 25px;
+  border-radius: 25px;
   border: none;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+  box-shadow: 0 3px 6px rgba(0,123,255,0.2);
 }
 
-button:disabled {
-  background: #6c757d;
-  cursor: not-allowed;
+button[type="submit"]:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 10px rgba(0,123,255,0.3);
+}
+
+button[type="submit"]::after {
+  content: '➤';
+  font-size: 1.1em;
+}
+
+button:has(img[src="/icons/copy-icon.png"]) {
+  order: 1; /* Перемещаем в конец ряда */
 }
 
 .reply-preview {
@@ -556,24 +639,5 @@ button:disabled {
   margin: 10px 0;
   color: #6c757d;
   font-size: 0.9em;
-}
-
-.editing-notice {
-  background: #fff3cd;
-  color: #856404;
-  padding: 8px;
-  border-radius: 6px;
-  margin-bottom: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.editing-notice button {
-  background: none;
-  border: none;
-  color: #856404;
-  font-size: 1.2em;
-  cursor: pointer;
 }
 </style>
