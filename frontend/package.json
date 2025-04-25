@@ -10,12 +10,13 @@
     "postinstall": "npm install @vue/cli-service -g"
   },
   "dependencies": {
+    "@vue/cli-service": "^4.5.19",
     "axios": "^0.21.1",
+    "socket.io-client": "^4.8.1",
     "vue": "^3.0.0",
     "vue-router": "^4.0.0",
     "vuedraggable": "^4.1.0",
-    "vuex": "^4.0.0",
-    "@vue/cli-service": "^4.5.19"
+    "vuex": "^4.0.0"
   },
   "devDependencies": {
     "@vue/cli-service": "^4.5.19"

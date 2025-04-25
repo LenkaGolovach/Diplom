@@ -140,19 +140,21 @@
 
 <script>
 import axios from 'axios';
+import { io } from 'socket.io-client';
+
 export default {
   props: {
     taskId: { type: Number, required: true }
   },
   data() {
     return {
+      socket: null,
       messages: [],
       newMessage: '',
       attachments: [],
       replyTo: null,
-      currentUser: this.$store.state.user,
       editingMessage: null,
-      pollInterval: null,
+      currentUser: this.$store.state.user,
     };
   },
   computed: {
@@ -160,63 +162,45 @@ export default {
       return (this.newMessage && this.newMessage.trim().length > 0) || this.attachments.length > 0;
     },
     groupedMessages() {
-      const groups = {}
+      const groups = {};
       this.messages.forEach(msg => {
-        const date = new Date(msg.created_at).toISOString().split('T')[0]
-        if (!groups[date]) groups[date] = []
-        groups[date].push(msg)
-      })
-      return groups
+        const date = new Date(msg.created_at).toISOString().split('T')[0];
+        if (!groups[date]) groups[date] = [];
+        groups[date].push(msg);
+      });
+      return groups;
     }
   },
   methods: {
-    startPolling() {
-      this.pollInterval = setInterval(() => {
-        this.fetchMessages();
-      }, 3000); // Опрашиваем сервер каждые 3 секунды
-    },
     async fetchMessages() {
       try {
         const { data } = await axios.get(`/api/tasks/${this.taskId}/messages/`, {
           params: { expand: 'reply_to.sender,attachments' },
           headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
         });
-        
-        // Обновляем только если есть изменения
-        if (JSON.stringify(this.messages) !== JSON.stringify(data)) {
-          this.messages = data;
-        }
+        this.messages = data;
       } catch (error) {
-        console.error('Ошибка загрузки сообщений:', error);
+        console.error('Error loading messages:', error);
       }
     },
     formatTime(ts) {
       return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     },
     formatDateDivider(dateStr) {
-      const date = new Date(dateStr)
+      const date = new Date(dateStr);
       return new Intl.DateTimeFormat('ru-RU', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-        weekday: 'short'
-      }).format(date).replace(/,/g, '')
+        day: 'numeric', month: 'long', year: 'numeric', weekday: 'short'
+      }).format(date).replace(/,/g, '');
     },
-    isImage(type) { 
-      return type && type.startsWith('image/')
+    isImage(type) {
+      return type && type.startsWith('image/');
     },
     isVideo(type) {
       return type && type.startsWith('video/');
     },
     startReply(message) {
-      this.replyTo = {
-        id: message.id,
-        text: message.text || 'вложение',
-        sender: message.sender
-      };
-      this.$nextTick(() => {
-        this.$refs.input.focus();
-      });
+      this.replyTo = { id: message.id, text: message.text || 'вложение', sender: message.sender };
+      this.$nextTick(() => this.$refs.input.focus());
     },
     cancelReply() {
       this.replyTo = null;
@@ -230,101 +214,54 @@ export default {
     },
     async sendMessage() {
       try {
+        const form = new FormData();
+        if (this.newMessage.trim()) form.append('text', this.newMessage);
+        if (this.replyTo) form.append('reply_to_id', this.replyTo.id);
+        this.attachments.forEach(file => form.append('attachments', file));
+
         if (this.editingMessage) {
-          // Режим редактирования
-          const form = new FormData();
-      
-          // Сохраняем текст даже если он пустой
-          form.append('text', this.newMessage ? this.newMessage.trim() : '');
-          
-          // Добавляем существующие вложения
-          this.attachments.forEach(file => {
-            if (file instanceof File) {
-              form.append('attachments', file);
-            } else {
-              // Для уже загруженных файлов
-              form.append('keep_attachments', file.id);
-            }
-          });
-          
-          // Сохраняем ответ если был
-          if (this.replyTo) {
-            form.append('reply_to_id', this.replyTo.id);
-          }
-          
+          // Editing existing
           await axios.patch(
             `/api/tasks/${this.taskId}/messages/${this.editingMessage.id}/`,
             form,
-            {
-              headers: {
-                'Content-Type': 'multipart/form-data',
-                Authorization: `Bearer ${localStorage.getItem('token')}`
-              }
-            }
+            { headers: { 'Content-Type': 'multipart/form-data', Authorization: `Bearer ${localStorage.getItem('token')}` } }
           );
-          
-          await this.fetchMessages();
-          this.cancelEdit();
+          this.editingMessage = null;
         } else {
-          // Оригинальная логика отправки нового сообщения
-          const form = new FormData();
-          if (this.newMessage.trim()) form.append('text', this.newMessage);
-          if (this.replyTo) form.append('reply_to_id', this.replyTo.id);
-          this.attachments.forEach(file => form.append('attachments', file));
-
-          await axios.post(`/api/tasks/${this.taskId}/messages/`, form, {
-            headers: {
-              'Content-Type': 'multipart/form-data',
-              Authorization: `Bearer ${localStorage.getItem('token')}`
-            }
-          });
-
-          await this.fetchMessages();
-          this.newMessage = '';
-          this.attachments = [];
-          this.replyTo = null;
+          // New message
+          await axios.post(
+            `/api/tasks/${this.taskId}/messages/`,
+            form,
+            { headers: { 'Content-Type': 'multipart/form-data', Authorization: `Bearer ${localStorage.getItem('token')}` } }
+          );
         }
-        
-        this.scrollToBottom();
+        this.newMessage = '';
+        this.attachments = [];
+        this.replyTo = null;
+        this.cancelEdit();
+        // No manual fetch: update comes via WebSocket
       } catch (error) {
-        console.error('Ошибка отправки сообщения:', error.response && error.response.data);
+        console.error('Error sending message:', error.response && error.response.data);
         alert(`Ошибка: ${(error.response && error.response.data && error.response.data.error) || 'Неизвестная ошибка'}`);
       }
     },
-    async deleteMessage(message) {
+    cancelEdit() {
+      this.editingMessage = null;
+    },
+    deleteMessage(message) {
       if (confirm('Удалить сообщение?')) {
-        try {
-          await axios.delete(`/api/tasks/${this.taskId}/messages/${message.id}/`);
-          await this.fetchMessages();
-        } catch (error) {
-          console.error('Ошибка удаления:', error);
-        }
+        axios.delete(`/api/tasks/${this.taskId}/messages/${message.id}/`);
       }
     },
     copyMessage(message) {
       navigator.clipboard.writeText(message.text);
     },
-    cancelEdit() {
-      this.editingMessage = null;
-      this.newMessage = '';
-      this.replyTo = null;
-      this.attachments = [];
-    },
-
     editMessage(message) {
       if (message.is_deleted) return;
       this.editingMessage = message;
       this.newMessage = message.text || '';
-      
-      // Сохраняем оригинальные вложения и ответ
-      this.replyTo = message.reply_to 
-        ? {...message.reply_to} 
-        : null;
-        
-      this.attachments = message.attachments.length
-        ? [...message.attachments] // Копируем вложения
-        : [];
-      
+      this.replyTo = message.reply_to ? { ...message.reply_to } : null;
+      this.attachments = message.attachments.length ? [...message.attachments] : [];
       this.$refs.input.focus();
     },
     scrollToBottom() {
@@ -335,14 +272,31 @@ export default {
     }
   },
   mounted() {
+    // Initial load
     this.fetchMessages();
-    this.startPolling();
+
+    // Setup WebSocket connection
+    this.socket = io(undefined, { query: { taskId: this.taskId } });
+
+    // Listen for new messages
+    this.socket.on('task:message-created', msg => {
+      this.messages.push(msg);
+      this.scrollToBottom();
+    });
+    this.socket.on('task:message-updated', updated => {
+      const idx = this.messages.findIndex(m => m.id === updated.id);
+      if (idx !== -1) this.$set(this.messages, idx, updated);
+    });
+    this.socket.on('task:message-deleted', del => {
+      this.messages = this.messages.filter(m => m.id !== del.id);
+    });
   },
   beforeUnmount() {
-    clearInterval(this.pollInterval);
-  },
+    if (this.socket) this.socket.disconnect();
+  }
 };
 </script>
+
 
 <style scoped>
 .chat-container {

@@ -1280,6 +1280,8 @@ export default {
 
 .file-list {
   max-height: 150px; /* Уменьшаем максимальную высоту */
+  overflow-y: auto;
+  margin-bottom: 15px;
 }
 
 .file-item {
@@ -1300,7 +1302,7 @@ export default {
   border-top: 1px solid rgba(0, 0, 0, 0.1);
   margin: 0;
   border-radius: 0 0 12px 12px;
-  z-index: 20;
+  z-index: 100;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   box-shadow: 0 -5px 10px rgba(0, 0, 0, 0.02);
