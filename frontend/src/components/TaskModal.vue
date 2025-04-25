@@ -6,10 +6,10 @@
         <div 
           v-for="(tab, index) in tabs" 
           :key="index"
-          :class="['tab', { 'active': activeTab === tab.id }]"
+          :class="['tab', `color-${index}`, { 'active': activeTab === tab.id }]"
           @click="activeTab = tab.id"
         >
-          {{ tab.label }}
+          <img :src="tab.icon" class="tab-icon" alt="">
         </div>
       </div>
       <!-- Заголовок задачи с возможностью редактирования -->
@@ -399,10 +399,10 @@ export default {
     return {
       activeTab: 'general',
       tabs: [
-        { id: 'general', label: 'Общее' },
-        { id: 'members', label: 'Участники' },
-        { id: 'discussion', label: 'Обсуждение' },
-        { id: 'github', label: 'GitHub' }
+        { id: 'general', icon: '/icons/info-icon.png' },
+        { id: 'members', icon: '/icons/members-icon.png' },
+        { id: 'discussion', icon: '/icons/discussion-icon.png' },
+        { id: 'github', icon: '/icons/github-icon.png' }
       ],
       isEditingTitle: false,
       localTask: {
@@ -867,7 +867,7 @@ export default {
 
 .sticky-tabs {
   position: absolute;
-  left: -135px; /* Увеличиваем выступ за край */
+  left: -50px; /* Увеличиваем выступ за край */
   top: 35%;
   transform: translateY(-40%);
   z-index: 1003; /* Повышаем над всеми элементами */
@@ -903,9 +903,21 @@ export default {
   border-color: transparent #fff9e6 transparent transparent;
 }
 
+.tab-icon {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
+}
+
+.tab.color-0 { background: #ff6b6b; } /* Красный */
+.tab.color-1 { background: #ffa500; } /* Оранжевый */
+.tab.color-2 { background: #4CAF50; } /* Зеленый */
+.tab.color-3 { background: #5b9cff; } /* Голубой */
+
 .tab.active {
   transform: rotate(-1deg) !important;
-  background: #ffecb3;
+  filter: brightness(85%) !important;
   z-index: 5;
 }
 

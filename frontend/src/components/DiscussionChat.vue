@@ -616,18 +616,17 @@ textarea {
 }
 
 button[type="submit"] {
-  background: #5b9cff;
+  background: linear-gradient(135deg, #007bff, #0056b3);
   color: white;
+  padding: 10px 25px;
+  border-radius: 25px;
   border: none;
-  padding: 12px 20px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 15px;
   font-weight: 500;
-  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 15px rgba(91, 156, 255, 0.3);
-  letter-spacing: 0.3px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+  box-shadow: 0 3px 6px rgba(0,123,255,0.2);
 }
 
 button[type="submit"]:hover:not(:disabled) {
