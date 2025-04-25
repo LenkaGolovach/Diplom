@@ -1,6 +1,17 @@
 <template>
   <div class="modal">
     <div class="modal-content">
+      <!-- Боковые вкладки -->
+      <div class="sticky-tabs">
+        <div 
+          v-for="(tab, index) in tabs" 
+          :key="index"
+          :class="['tab', { 'active': activeTab === tab.id }]"
+          @click="activeTab = tab.id"
+        >
+          {{ tab.label }}
+        </div>
+      </div>
       <!-- Заголовок задачи с возможностью редактирования -->
       <div class="task-header">
         <div
@@ -21,328 +32,340 @@
         />
       </div>
 
-      <!-- Основное содержимое с отступами -->
-      <div class="modal-body">
-        <!-- Описание задачи -->
-        <div class="form-group">
-          <label>Описание:</label>
-          <textarea
-            v-model="localTask.description"
-            placeholder="Введите описание задачи"
-            class="description-input"
-          ></textarea>
-        </div>
+      <!-- Основное содержимое с вкладками -->
+      <div class="modal-body-with-tabs">
 
-        <!-- Прогресс-бар (только если есть подзадачи) -->
-        <div v-if="hasSubtasks" class="progress-container">
-          <div class="progress-bar">
-            <div class="progress" :style="{ width: progress + '%' }"></div>
-          </div>
-          <div class="progress-text">{{ progress }}% выполнено</div>
-        </div>
-
-        <!-- Кнопка добавления подзадачи -->
-        <button @click="addSubtask" class="add-subtask-button">
-          + Добавить подзадачу
-        </button>
-
-        <!-- Список подзадач -->
-        <div class="subtasks">
-          <div v-for="(subtask, index) in localTask.subtasks" :key="index" class="subtask">
-            <input
-              type="checkbox"
-              v-model="subtask.completed"
-              @change="updateProgress"
-            />
-            <div
-              class="subtask-title"
-              @dblclick="startEditingSubtask(index)"
-            >
-              <template v-if="!subtask.editing">
-                {{ subtask.name }}
-              </template>
-              <input
-                v-else
-                v-model="subtask.name"
-                @blur="stopEditingSubtask(index)"
-                @keyup.enter="stopEditingSubtask(index)"
-                class="subtask-input"
-              />
+        <!-- Контент вкладок -->
+        <div class="tab-content">
+          <!-- Вкладка "Общее" -->
+          <div v-if="activeTab === 'general'" class="tab-pane">
+            <!-- Описание задачи -->
+            <div class="form-group">
+              <label>Описание:</label>
+              <textarea
+                v-model="localTask.description"
+                placeholder="Введите описание задачи"
+                class="description-input"
+              ></textarea>
             </div>
-            <button @click="deleteSubtask(index)" class="delete-subtask-button">
-              ×
+
+            <!-- Прогресс-бар -->
+            <div v-if="hasSubtasks" class="progress-container">
+              <div class="progress-bar">
+                <div class="progress" :style="{ width: progress + '%' }"></div>
+              </div>
+              <div class="progress-text">{{ progress }}% выполнено</div>
+            </div>
+
+            <!-- Подзадачи -->
+            <button @click="addSubtask" class="add-subtask-button">
+              + Добавить подзадачу
             </button>
-          </div>
-        </div>
 
-        <!-- Секция для прикрепленных файлов -->
-        <div class="file-section">
-          <label>Прикрепленные файлы:</label>
-          <div class="file-list">
-            <div v-for="(file, index) in localTask.files" :key="index" class="file-item">
-              <div class="file-preview" @click="downloadFile(file)">
-                <img v-if="isImage(file.type)" :src="file.url" class="thumbnail">
-                <div v-else class="file-icon">
-                  <img src="/icons/file-icon.png" alt="Document Icon" class="file-icon-img">
+            <div class="subtasks">
+              <div v-for="(subtask, index) in localTask.subtasks" :key="index" class="subtask">
+                <input
+                  type="checkbox"
+                  v-model="subtask.completed"
+                  @change="updateProgress"
+                />
+                <div
+                  class="subtask-title"
+                  @dblclick="startEditingSubtask(index)"
+                >
+                  <template v-if="!subtask.editing">
+                    {{ subtask.name }}
+                  </template>
+                  <input
+                    v-else
+                    v-model="subtask.name"
+                    @blur="stopEditingSubtask(index)"
+                    @keyup.enter="stopEditingSubtask(index)"
+                    class="subtask-input"
+                  />
                 </div>
-              </div>
-              <div class="file-info">
-                <span class="file-name">{{ file.name }}</span>
-                <button @click="removeFile(index)" class="delete-file">×</button>
+                <button @click="deleteSubtask(index)" class="delete-subtask-button">
+                  ×
+                </button>
               </div>
             </div>
-          </div>
-          
-          <label class="file-upload">
-            <input 
-              ref="fileInput"
-              type="file" 
-              @change="handleFileUpload" 
-              multiple
-              class="file-input"
-            >
-            <span class="upload-button">+ Добавить файлы</span>
-          </label>
-        </div>
 
-        <!-- Секция участников -->
-        <div class="participants-section">
-          <label>Участники:</label>
-          <div class="participants-list">
-            <div 
-              v-for="member in localTask.members" 
-              :key="member.email"
-              class="participant"
-            >
-              <img 
-                :src="member.avatar || '/default-avatar.png'" 
-                class="avatar"
+            <!-- Прикрепленные файлы -->
+            <div class="file-section">
+              <label>Прикрепленные файлы:</label>
+              <div class="file-list">
+                <div v-for="(file, index) in localTask.files" :key="index" class="file-item">
+                  <div class="file-preview" @click="downloadFile(file)">
+                    <img v-if="isImage(file.type)" :src="file.url" class="thumbnail">
+                    <div v-else class="file-icon">
+                      <img src="/icons/file-icon.png" alt="Document Icon" class="file-icon-img">
+                    </div>
+                  </div>
+                  <div class="file-info">
+                    <span class="file-name">{{ file.name }}</span>
+                    <button @click="removeFile(index)" class="delete-file">×</button>
+                  </div>
+                </div>
+              </div>
+              
+              <label class="file-upload">
+                <input 
+                  ref="fileInput"
+                  type="file" 
+                  @change="handleFileUpload" 
+                  multiple
+                  class="file-input"
+                >
+                <span class="upload-button">+ Добавить файлы</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Вкладка "Участники" -->
+          <div v-if="activeTab === 'members'" class="tab-pane">
+            <div class="participants-section">
+              <label>Участники:</label>
+              <div class="participants-list">
+                <div 
+                  v-for="member in localTask.members" 
+                  :key="member.email"
+                  class="participant"
+                >
+                  <img 
+                    :src="member.avatar || '/default-avatar.png'" 
+                    class="avatar"
+                  >
+                  <span>{{ member.email }}</span>
+                </div>
+              </div>
+              <button 
+                @click="toggleParticipation"
+                :class="['participation-btn', { 'joined': isParticipant }]"
+                :disabled="!localTask.id"
               >
-              <span>{{ member.email }}</span>
+                {{ isParticipant ? 'Отказаться' : 'Присоединиться' }}
+              </button>
             </div>
           </div>
-          <button 
-            @click="toggleParticipation"
-            :class="['participation-btn', { 'joined': isParticipant }]"
-            :disabled="!localTask.id"
-          >
-            {{ isParticipant ? 'Отказаться' : 'Присоединиться' }}
-          </button>
-        </div>
 
-        <!-- Секция чата -->
-        <DiscussionChat v-if="localTask.id" :task-id="localTask.id" />
+          <!-- Вкладка "Обсуждение" -->
+          <div v-if="activeTab === 'discussion'" class="tab-pane">
+            <DiscussionChat v-if="localTask.id" :task-id="localTask.id" />
+          </div>
 
-        <!-- GitHub интеграция -->
-        <div class="github-section">
-          <label>GitHub интеграция:</label>
-          <div class="github-controls">
-            <select v-model="selectedGitHubAction" class="github-action-select">
-              <option value="">Выберите действие</option>
-              <option value="track-commits">Отслеживать коммиты</option>
-              <option value="repo-info">Информация о репозитории</option>
-              <option value="view-prs">Просмотр Pull Requests</option>
-            </select>
+          <!-- Вкладка "GitHub" -->
+          <div v-if="activeTab === 'github'" class="tab-pane">
+            <div class="github-section">
+              <label>GitHub интеграция:</label>
+              <div class="github-controls">
+                <select v-model="selectedGitHubAction" class="github-action-select">
+                  <option value="">Выберите действие</option>
+                  <option value="track-commits">Отслеживать коммиты</option>
+                  <option value="repo-info">Информация о репозитории</option>
+                  <option value="view-prs">Просмотр Pull Requests</option>
+                </select>
 
-            <!-- Выбор репозитория -->
-            <div v-if="selectedGitHubAction && !linkedRepo" class="github-content">
-              <div class="repo-selection">
-                <h4>Выберите репозиторий</h4>
-                
-                <!-- Вкладки -->
-                <div class="repo-tabs">
-                  <button 
-                    :class="['tab-btn', { active: activeTab === 'search' }]"
-                    @click="activeTab = 'search'"
-                  >
-                    Поиск
-                  </button>
-                  <button 
-                    :class="['tab-btn', { active: activeTab === 'recent' }]"
-                    @click="activeTab = 'recent'"
-                  >
-                    Недавние
-                  </button>
-                  <button 
-                    :class="['tab-btn', { active: activeTab === 'link' }]"
-                    @click="activeTab = 'link'"
-                  >
-                    Ссылка
-                  </button>
-                </div>
-
-                <!-- Поиск репозиториев -->
-                <div v-if="activeTab === 'search'" class="tab-content">
-                  <div class="search-container">
-                    <input 
-                      v-model="githubSearchQuery" 
-                      @input="searchGitHubRepos" 
-                      placeholder="Поиск репозиториев..."
-                      class="github-search-input"
-                    >
-                    <div v-if="searchResults.length" class="search-results">
-                      <div 
-                        v-for="repo in searchResults" 
-                        :key="repo.id" 
-                        class="repo-item"
-                        @click="selectRepo(repo)"
+                <!-- Выбор репозитория -->
+                <div v-if="selectedGitHubAction && !linkedRepo" class="github-content">
+                  <div class="repo-selection">
+                    <h4>Выберите репозиторий</h4>
+                    
+                    <!-- Вкладки -->
+                    <div class="repo-tabs">
+                      <button 
+                        :class="['tab-btn', { active: activeTab === 'search' }]"
+                        @click="activeTab = 'search'"
                       >
-                        <div class="repo-name">{{ repo.name }}</div>
-                        <div class="repo-description">{{ repo.description }}</div>
+                        Поиск
+                      </button>
+                      <button 
+                        :class="['tab-btn', { active: activeTab === 'recent' }]"
+                        @click="activeTab = 'recent'"
+                      >
+                        Недавние
+                      </button>
+                      <button 
+                        :class="['tab-btn', { active: activeTab === 'link' }]"
+                        @click="activeTab = 'link'"
+                      >
+                        Ссылка
+                      </button>
+                    </div>
+
+                    <!-- Поиск репозиториев -->
+                    <div v-if="activeTab === 'search'" class="tab-content">
+                      <div class="search-container">
+                        <input 
+                          v-model="githubSearchQuery" 
+                          @input="searchGitHubRepos" 
+                          placeholder="Поиск репозиториев..."
+                          class="github-search-input"
+                        >
+                        <div v-if="searchResults.length" class="search-results">
+                          <div 
+                            v-for="repo in searchResults" 
+                            :key="repo.id" 
+                            class="repo-item"
+                            @click="selectRepo(repo)"
+                          >
+                            <div class="repo-name">{{ repo.name }}</div>
+                            <div class="repo-description">{{ repo.description }}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Недавние репозитории -->
+                    <div v-if="activeTab === 'recent'" class="tab-content">
+                      <div v-if="recentRepos.length" class="recent-repos">
+                        <div 
+                          v-for="repo in recentRepos" 
+                          :key="repo.id" 
+                          class="repo-item"
+                          @click="selectRepo(repo)"
+                        >
+                          <div class="repo-name">{{ repo.name }}</div>
+                          <div class="repo-description">{{ repo.description }}</div>
+                        </div>
+                      </div>
+                      <div v-else class="no-repos-message">
+                        Нет недавно использованных репозиториев
+                      </div>
+                    </div>
+
+                    <!-- Ввод ссылки -->
+                    <div v-if="activeTab === 'link'" class="tab-content">
+                      <div class="link-repo-container">
+                        <input 
+                          v-model="repoUrl" 
+                          placeholder="https://github.com/user/repo" 
+                          class="repo-url-input"
+                        >
+                        <button @click="linkRepository" class="link-repo-btn">
+                          Привязать
+                        </button>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <!-- Недавние репозитории -->
-                <div v-if="activeTab === 'recent'" class="tab-content">
-                  <div v-if="recentRepos.length" class="recent-repos">
-                    <div 
-                      v-for="repo in recentRepos" 
-                      :key="repo.id" 
-                      class="repo-item"
-                      @click="selectRepo(repo)"
-                    >
-                      <div class="repo-name">{{ repo.name }}</div>
-                      <div class="repo-description">{{ repo.description }}</div>
+                <!-- Содержимое в зависимости от выбранного действия -->
+                <div v-else-if="selectedGitHubAction && linkedRepo" class="github-content">
+                  <!-- Отслеживание коммитов -->
+                  <div v-if="selectedGitHubAction === 'track-commits'" class="action-content">
+                    <div class="repo-header">
+                      <div class="repo-info">
+                        <span class="repo-name">{{ linkedRepo.name }}</span>
+                        <button @click="changeRepo" class="change-repo-btn">
+                          Сменить репозиторий
+                        </button>
+                      </div>
+                      <button @click="refreshCommits" class="refresh-btn">
+                        🔄 Обновить
+                      </button>
+                    </div>
+                    <div class="commits-list">
+                      <div v-if="commits && commits.length > 0">
+                        <div 
+                          v-for="commit in commits" 
+                          :key="commit.sha" 
+                          class="commit-item"
+                          :class="{ 'error-commit': commit.sha.startsWith('error') }"
+                        >
+                          <div class="commit-header">
+                            <img :src="commit.author.avatar_url" class="author-avatar">
+                            <span class="author-name">{{ commit.author.name }}</span>
+                            <a 
+                              v-if="!commit.sha.startsWith('error')" 
+                              :href="commit.html_url" 
+                              target="_blank" 
+                              class="commit-link"
+                            >
+                              <i class="external-icon">↗</i>
+                            </a>
+                          </div>
+                          <div class="commit-message">{{ commit.message }}</div>
+                          <div class="commit-date">{{ commit.author.date }}</div>
+                        </div>
+                      </div>
+                      <div v-else class="empty-commits">
+                        <p>Коммиты не найдены. Попробуйте обновить.</p>
+                        <div v-if="commitsDebug" class="debug-info">
+                          <pre>{{ JSON.stringify(commitsDebug, null, 2) }}</pre>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div v-else class="no-repos-message">
-                    Нет недавно использованных репозиториев
-                  </div>
-                </div>
 
-                <!-- Ввод ссылки -->
-                <div v-if="activeTab === 'link'" class="tab-content">
-                  <div class="link-repo-container">
-                    <input 
-                      v-model="repoUrl" 
-                      placeholder="https://github.com/user/repo" 
-                      class="repo-url-input"
-                    >
-                    <button @click="linkRepository" class="link-repo-btn">
-                      Привязать
-                    </button>
+                  <!-- Pull Requests -->
+                  <div v-if="selectedGitHubAction === 'view-prs'" class="action-content">
+                    <div class="repo-header">
+                      <div class="repo-info">
+                        <span class="repo-name">{{ linkedRepo.name }}</span>
+                        <button @click="changeRepo" class="change-repo-btn">
+                          Сменить репозиторий
+                        </button>
+                      </div>
+                      <button @click="refreshPRs" class="refresh-btn">
+                        🔄 Обновить
+                      </button>
+                    </div>
+                    <div class="prs-list">
+                      <div 
+                        v-for="pr in pullRequests" 
+                        :key="pr.id" 
+                        class="pr-item"
+                      >
+                        <div class="pr-title">{{ pr.title }}</div>
+                        <div class="pr-info">
+                          <span class="pr-author">{{ pr.user.login }}</span>
+                          <span class="pr-status" :class="pr.state">{{ pr.state }}</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            </div>
 
-            <!-- Содержимое в зависимости от выбранного действия -->
-            <div v-else-if="selectedGitHubAction && linkedRepo" class="github-content">
-              <!-- Отслеживание коммитов -->
-              <div v-if="selectedGitHubAction === 'track-commits'" class="action-content">
-                <div class="repo-header">
-                  <div class="repo-info">
-                    <span class="repo-name">{{ linkedRepo.name }}</span>
-                    <button @click="changeRepo" class="change-repo-btn">
-                      Сменить репозиторий
-                    </button>
-                  </div>
-                  <button @click="refreshCommits" class="refresh-btn">
-                    🔄 Обновить
-                  </button>
-                </div>
-                <div class="commits-list">
-                  <div v-if="commits && commits.length > 0">
-                    <div 
-                      v-for="commit in commits" 
-                      :key="commit.sha" 
-                      class="commit-item"
-                      :class="{ 'error-commit': commit.sha.startsWith('error') }"
-                    >
-                      <div class="commit-header">
-                        <img :src="commit.author.avatar_url" class="author-avatar">
-                        <span class="author-name">{{ commit.author.name }}</span>
-                        <a 
-                          v-if="!commit.sha.startsWith('error')" 
-                          :href="commit.html_url" 
-                          target="_blank" 
-                          class="commit-link"
-                        >
-                          <i class="external-icon">↗</i>
+                  <!-- Информация о репозитории (новая секция) -->
+                  <div v-if="selectedGitHubAction === 'repo-info'" class="action-content">
+                    <div class="repo-header">
+                      <div class="repo-info">
+                        <span class="repo-name">{{ linkedRepo.name }}</span>
+                        <button @click="changeRepo" class="change-repo-btn">
+                          Сменить репозиторий
+                        </button>
+                      </div>
+                      <button @click="refreshRepoInfo" class="refresh-btn">
+                        🔄 Обновить
+                      </button>
+                    </div>
+                    <div class="repo-details">
+                      <div class="repo-detail-item">
+                        <div class="detail-label">Владелец:</div>
+                        <div class="detail-value">{{ repoDetails.owner }}</div>
+                      </div>
+                      <div class="repo-detail-item">
+                        <div class="detail-label">Дата создания:</div>
+                        <div class="detail-value">{{ repoDetails.created_at || 'Н/Д' }}</div>
+                      </div>
+                      <div class="repo-detail-item">
+                        <div class="detail-label">Последнее обновление:</div>
+                        <div class="detail-value">{{ repoDetails.updated_at || 'Н/Д' }}</div>
+                      </div>
+                      <div class="repo-detail-item">
+                        <div class="detail-label">Звёзд:</div>
+                        <div class="detail-value">{{ repoDetails.stars || 0 }}</div>
+                      </div>
+                      <div class="repo-detail-item">
+                        <div class="detail-label">Форков:</div>
+                        <div class="detail-value">{{ repoDetails.forks || 0 }}</div>
+                      </div>
+                      <div class="repo-url-item">
+                        <div class="detail-label">URL:</div>
+                        <a :href="repoDetails.html_url" target="_blank" class="repo-link">
+                          {{ repoDetails.html_url }} <i class="external-icon">↗</i>
                         </a>
                       </div>
-                      <div class="commit-message">{{ commit.message }}</div>
-                      <div class="commit-date">{{ commit.author.date }}</div>
                     </div>
-                  </div>
-                  <div v-else class="empty-commits">
-                    <p>Коммиты не найдены. Попробуйте обновить.</p>
-                    <div v-if="commitsDebug" class="debug-info">
-                      <pre>{{ JSON.stringify(commitsDebug, null, 2) }}</pre>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Pull Requests -->
-              <div v-if="selectedGitHubAction === 'view-prs'" class="action-content">
-                <div class="repo-header">
-                  <div class="repo-info">
-                    <span class="repo-name">{{ linkedRepo.name }}</span>
-                    <button @click="changeRepo" class="change-repo-btn">
-                      Сменить репозиторий
-                    </button>
-                  </div>
-                  <button @click="refreshPRs" class="refresh-btn">
-                    🔄 Обновить
-                  </button>
-                </div>
-                <div class="prs-list">
-                  <div 
-                    v-for="pr in pullRequests" 
-                    :key="pr.id" 
-                    class="pr-item"
-                  >
-                    <div class="pr-title">{{ pr.title }}</div>
-                    <div class="pr-info">
-                      <span class="pr-author">{{ pr.user.login }}</span>
-                      <span class="pr-status" :class="pr.state">{{ pr.state }}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Информация о репозитории (новая секция) -->
-              <div v-if="selectedGitHubAction === 'repo-info'" class="action-content">
-                <div class="repo-header">
-                  <div class="repo-info">
-                    <span class="repo-name">{{ linkedRepo.name }}</span>
-                    <button @click="changeRepo" class="change-repo-btn">
-                      Сменить репозиторий
-                    </button>
-                  </div>
-                  <button @click="refreshRepoInfo" class="refresh-btn">
-                    🔄 Обновить
-                  </button>
-                </div>
-                <div class="repo-details">
-                  <div class="repo-detail-item">
-                    <div class="detail-label">Владелец:</div>
-                    <div class="detail-value">{{ repoDetails.owner }}</div>
-                  </div>
-                  <div class="repo-detail-item">
-                    <div class="detail-label">Дата создания:</div>
-                    <div class="detail-value">{{ repoDetails.created_at || 'Н/Д' }}</div>
-                  </div>
-                  <div class="repo-detail-item">
-                    <div class="detail-label">Последнее обновление:</div>
-                    <div class="detail-value">{{ repoDetails.updated_at || 'Н/Д' }}</div>
-                  </div>
-                  <div class="repo-detail-item">
-                    <div class="detail-label">Звёзд:</div>
-                    <div class="detail-value">{{ repoDetails.stars || 0 }}</div>
-                  </div>
-                  <div class="repo-detail-item">
-                    <div class="detail-label">Форков:</div>
-                    <div class="detail-value">{{ repoDetails.forks || 0 }}</div>
-                  </div>
-                  <div class="repo-url-item">
-                    <div class="detail-label">URL:</div>
-                    <a :href="repoDetails.html_url" target="_blank" class="repo-link">
-                      {{ repoDetails.html_url }} <i class="external-icon">↗</i>
-                    </a>
                   </div>
                 </div>
               </div>
@@ -374,6 +397,13 @@ export default {
   },
   data() {
     return {
+      activeTab: 'general',
+      tabs: [
+        { id: 'general', label: 'Общее' },
+        { id: 'members', label: 'Участники' },
+        { id: 'discussion', label: 'Обсуждение' },
+        { id: 'github', label: 'GitHub' }
+      ],
       isEditingTitle: false,
       localTask: {
         id: this.task.id,
@@ -394,7 +424,6 @@ export default {
       commits: [],
       pullRequests: [],
       repoUrl: '',
-      activeTab: 'search',
       recentRepos: [],
       commitsDebug: null,
       repoDetails: {},
@@ -824,6 +853,110 @@ export default {
 </script>
 
 <style scoped>
+.modal {
+  overflow: visible !important;
+  backdrop-filter: none;
+}
+
+.modal-content {
+  position: relative;
+  padding-left: 60px;
+  overflow: visible !important; /* Разрешаем выход за границы */
+  background-clip: padding-box; /* Сохраняем обрезку фона */
+}
+
+.sticky-tabs {
+  position: absolute;
+  left: -135px; /* Увеличиваем выступ за край */
+  top: 35%;
+  transform: translateY(-40%);
+  z-index: 1003; /* Повышаем над всеми элементами */
+  filter: drop-shadow(-5px 5px 10px rgba(0,0,0,0.1)); /* Добавляем тень */
+  pointer-events: auto;
+}
+
+.tab {
+  background: #fff9e6;
+  padding: 14px 24px;
+  border-radius: 8px 0 0 8px;
+  transform: rotate(-4deg);
+  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+  position: relative;
+  font-family: 'Caveat', cursive;
+  font-size: 20px;
+  color: #6d4c41;
+  margin-left: -35px;
+  clip-path: inset(-20px -20px -20px 0); /* Разрешаем отображение за пределами */
+}
+
+.tab:nth-child(2) { transform: rotate(-2deg); z-index: 1; margin-left: -30px; }
+.tab:nth-child(3) { transform: rotate(0deg); z-index: 2; margin-left: -25px; }
+.tab:nth-child(4) { transform: rotate(2deg); z-index: 3; margin-left: -20px; }
+
+.tab::after {
+  transform: none !important;
+  margin-left: 0 !important;
+  position: relative;
+  left: 0;
+  border-width: 12px 12px 12px 0;
+  border-style: solid;
+  border-color: transparent #fff9e6 transparent transparent;
+}
+
+.tab.active {
+  transform: rotate(-1deg) !important;
+  background: #ffecb3;
+  z-index: 5;
+}
+
+.tab:hover {
+  transform: rotate(-3deg) !important;
+
+}
+
+.modal-body-with-tabs {
+  overflow-y: auto;
+  overflow-x: hidden !important;
+  max-height: calc(100vh - 160px);
+  padding: 10px;
+}
+
+.tab-content {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  min-height: 400px;
+}
+
+.tab-pane {
+  animation: fadeIn 0.3s ease;
+  overflow: auto !important;
+}
+
+.modal-body-with-tabs {
+  overflow-y: auto !important;  /* возвращаем вертикальную прокрутку */
+  overflow-x: hidden;            /* по горизонтали скрываем лишнее */
+}
+.tab-content,
+.tab-pane {
+  overflow: visible;             /* если внутри этих блоков прокрутка не нужна */
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Адаптация остальных стилей */
+.subtasks {
+  max-height: 40vh;
+}
+
+.github-content {
+  max-height: 50vh;
+}
+
 /* Стилизация полос прокрутки */
 ::-webkit-scrollbar {
   width: 8px;
@@ -881,7 +1014,7 @@ export default {
   max-height: 90vh;
   overflow-y: auto;
   overflow-x: hidden;
-  z-index: 1002;
+  z-index: 1005;
   display: flex;
   flex-direction: column;
   position: relative;
@@ -890,6 +1023,19 @@ export default {
   border: 1px solid rgba(255, 255, 255, 0.4);
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 0, 0, 0.1) transparent;
+}
+
+.modal-content::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  top: 15%;
+  width: 8px;                   /* = padding-left, подгоните под ваш отступ */
+  height: 50%;
+  background: #f0f0f0; /* совпадает с фоном .modal-content */
+  pointer-events: none;          /* не блокирует клики по табам */
+  z-index: 1004;                 /* между фоном и табами */
 }
 
 .task-header {
