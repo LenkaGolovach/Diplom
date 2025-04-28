@@ -12,6 +12,9 @@
       <router-link to="/boards" class="menu-item">
         <span class="icon">📋</span> Проекты
       </router-link>
+      <router-link to="/neuro-chat" class="menu-item">
+        <span class="icon">֎</span> Нейро-чат
+      </router-link>
     </nav>
 
     <button class="logout-btn" @click="logout">

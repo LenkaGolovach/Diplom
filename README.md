@@ -45,6 +45,14 @@ python manage.py makemigrations api
 python manage.py migrate
 ```
 
+### Запустите celery:
+
+```bash
+celery -A core.celery worker -l info -P eventlet
+python run_socketio.py
+ollama serve
+```
+
 ### Запустите сервер разработки:
 
 Запустите сервер Django:

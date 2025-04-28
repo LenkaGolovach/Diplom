@@ -3,6 +3,7 @@ import Login from '../components/Auth/Login.vue';
 import Register from '../components/Auth/Register.vue';
 import BoardsList from '../views/BoardsList.vue';
 import Board from '../views/Board.vue';
+import NeuroChat from '@/views/NeuroChat.vue';
 
 const routes = [
   { path: '/', redirect: '/login' },
@@ -30,6 +31,12 @@ const routes = [
     path: '/invite/:token',
     name: 'Invite',
     component: () => import('../views/InviteView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/neuro-chat',
+    name: 'NeuroChat',
+    component: NeuroChat,
     meta: { requiresAuth: true }
   }
 ];

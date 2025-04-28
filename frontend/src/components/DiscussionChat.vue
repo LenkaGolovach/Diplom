@@ -2,22 +2,21 @@
   <div class="chat-container">
     <div class="messages-list">
       <template v-for="(group, date) in groupedMessages" :key="date">
-        <div class="date-divider">
-          {{ formatDateDivider(date) }}
-        </div>
-        <div 
-          v-for="message in group" 
+        <div class="date-divider">{{ formatDateDivider(date) }}</div>
+
+        <div
+          v-for="message in group"
           :key="message.id"
-          :class="['message-item', { 'own': message.sender.id === currentUser.id }]"
+          :class="['message-item', { own: message.sender.id === current.id }]"
         >
-          <div class="avatar" v-if="message.sender.id !== currentUser.id">
+          <div class="avatar" v-if="message.sender.id !== current.id">
             <img :src="message.sender.avatar || '/default-avatar.png'" alt="avatar">
           </div>
 
           <div class="message-content">
             <div class="message-header">
-              <span class="sender-name" v-if="message.sender.id !== currentUser.id">
-                {{ message.sender.name }}
+              <span class="sender-name" v-if="message.sender.id !== current.id">
+                {{ message.sender.name || message.sender.email }}
               </span>
               <span class="message-time">
                 {{ formatTime(message.created_at) }}
@@ -28,63 +27,32 @@
             <div class="message-body" v-if="!message.is_deleted">
               <div class="reply-preview" v-if="message.reply_to">
                 <span class="reply-sender">
-                  @{{ (message.reply_to.sender && message.reply_to.sender.name) || message.reply_to.sender.email || 'Неизвестный' }}:
+                  @{{ message.reply_to.sender.name || message.reply_to.sender.email }}:
                 </span>
                 <span class="reply-text">
                   {{ message.reply_to.text || 'вложение' }}
                 </span>
               </div>
-
-              <p class="text" v-if="message.text">
-                {{ message.text }}
-              </p>
-
+              <p class="text" v-if="message.text">{{ message.text }}</p>
               <div class="attachments" v-if="message.attachments.length">
-                <div
-                  v-for="(file, idx) in message.attachments"
-                  :key="idx"
-                  class="attachment-item"
-                >
+                <div v-for="(file, idx) in message.attachments" :key="idx" class="attachment-item">
                   <div class="attachment-preview">
-                    <img
-                      v-if="isImage(file.content_type)"
-                      :src="file.url"
-                      class="attachment-thumb"
-                    />
-                    <video
-                      v-else-if="isVideo(file.content_type)"
-                      :src="file.url"
-                      class="attachment-thumb"
-                    ></video>
-                    <img
-                      v-else
-                      src="/icons/file-icon.png"
-                      class="file-icon"
-                    />
+                    <img v-if="isImage(file.type)" :src="file.url" class="attachment-thumb" />
+                    <video v-else-if="isVideo(file.type)" :src="file.url" class="attachment-thumb"></video>
+                    <img v-else src="/icons/file-icon.png" class="file-icon" />
                   </div>
-                  <a 
-                    :href="file.url" 
-                    target="_blank"
-                    class="attachment-name"
-                  >
-                    {{ file.name }}
-                  </a>
+                  <a :href="file.url" target="_blank" class="attachment-name">{{ file.name }}</a>
                 </div>
               </div>
             </div>
-
-            <div v-else class="deleted-message">
-              Сообщение удалено
-            </div>
+            <div v-else class="deleted-message">Сообщение удалено</div>
 
             <div class="message-actions">
-              <button @click="startReply(message)">
-                <img src="/icons/reply-icon.png" class="action-icon">
-              </button>
-              <button @click="editMessage(message)" v-if="message.sender.id === currentUser.id">
+              <button @click="startReply(message)"><img src="/icons/reply-icon.png" class="action-icon"></button>
+              <button @click="editMessage(message)" v-if="message.sender.id === current.id">
                 <img src="/icons/edit-icon.png" class="action-icon">
               </button>
-              <button @click="deleteMessage(message)" v-if="message.sender.id === currentUser.id">
+              <button @click="deleteMessage(message)" v-if="message.sender.id === current.id">
                 <img src="/icons/delete-icon.png" class="action-icon">
               </button>
               <button @click="copyMessage(message)">
@@ -96,13 +64,17 @@
       </template>
     </div>
 
+    <div v-if="aiThinking" class="ai-thinking">
+      <img src="/icons/ai-spinner.gif" alt="loading" class="ai-spinner" />
+      ИИ отвечает…
+   </div>
+
     <div class="chat-input-area">
       <div v-if="replyTo" class="replying-to">
         Ответ на: <strong>{{ replyTo.text }}</strong>
         <button @click="cancelReply">×</button>
       </div>
 
-      <!-- Блок режима редактирования -->
       <div v-if="editingMessage" class="editing-notice">
         Редактирование сообщения
         <button @click="cancelEdit">×</button>
@@ -119,7 +91,7 @@
         ref="input"
         v-model="newMessage"
         placeholder="Напишите сообщение..."
-        @keyup.enter.exact.prevent="sendMessage"
+        @keyup.enter.exact.prevent="onSendClick"
       ></textarea>
 
       <div class="input-actions">
@@ -127,10 +99,7 @@
           <img src="/icons/attach-icon.png" class="action-icon">
           <input type="file" multiple @change="handleAttachment" hidden>
         </label>
-        <button 
-          @click="sendMessage" 
-          :disabled="!isMessageValid"
-        >
+        <button @click="onSendClick" :disabled="!isMessageValid">
           {{ editingMessage ? 'Сохранить' : 'Отправить' }}
         </button>
       </div>
@@ -139,166 +108,255 @@
 </template>
 
 <script>
-import axios from 'axios';
-import { io } from 'socket.io-client';
+import axios from 'axios'
+import { io } from 'socket.io-client'
+import { mapState } from 'vuex'
 
 export default {
+  name: 'DiscussionChat',
+
   props: {
-    taskId: { type: Number, required: true }
+    taskId: { type: [Number, String], default: null },
+    fetchMessages: { type: Function, default: null },
+    sendMessage: { type: Function, default: null },
+    messages: { type: Array, default: null },
+    currentUser: { type: Object, default: () => ({ id: null }) },  // безопасный дефолт
+    iconPath: { type: String, default: '/default-avatar.png' },
+    socketQuery: { type: Object, default: () => ({}) },
+    aiThinking: { type: Boolean, default: false }
   },
+
   data() {
     return {
-      socket: null,
-      messages: [],
+      internalMessages: [],
       newMessage: '',
       attachments: [],
       replyTo: null,
       editingMessage: null,
-      currentUser: this.$store.state.user,
-    };
-  },
-  computed: {
-    isMessageValid() {
-      return (this.newMessage && this.newMessage.trim().length > 0) || this.attachments.length > 0;
-    },
-    groupedMessages() {
-      const groups = {};
-      this.messages.forEach(msg => {
-        const date = new Date(msg.created_at).toISOString().split('T')[0];
-        if (!groups[date]) groups[date] = [];
-        groups[date].push(msg);
-      });
-      return groups;
+      socket: null
     }
   },
+
+  computed: {
+    ...mapState(['user']),  
+
+    current() {
+      return this.currentUser.id != null ? this.currentUser : this.user  
+    },
+
+    allMessages() {
+      return Array.isArray(this.messages)
+        ? this.messages
+        : this.internalMessages
+    },
+
+    isMessageValid() {
+      return (this.newMessage && this.newMessage.trim()) || this.attachments.length
+    },
+
+    groupedMessages() {
+      const groups = {}
+      this.allMessages.forEach(msg => {  
+        const date = new Date(msg.created_at).toISOString().split('T')[0]
+        if (!groups[date]) groups[date] = []
+        groups[date].push(msg)
+      })
+      return groups
+    }
+  },
+
   methods: {
-    async fetchMessages() {
-      try {
-        const { data } = await axios.get(`/api/tasks/${this.taskId}/messages/`, {
-          params: { expand: 'reply_to.sender,attachments' },
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-        });
-        this.messages = data;
-      } catch (error) {
-        console.error('Error loading messages:', error);
-      }
-    },
     formatTime(ts) {
-      return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     },
+
     formatDateDivider(dateStr) {
-      const date = new Date(dateStr);
+      const date = new Date(dateStr)
       return new Intl.DateTimeFormat('ru-RU', {
         day: 'numeric', month: 'long', year: 'numeric', weekday: 'short'
-      }).format(date).replace(/,/g, '');
+      }).format(date).replace(/,/g, '')
     },
-    isImage(type) {
-      return type && type.startsWith('image/');
-    },
-    isVideo(type) {
-      return type && type.startsWith('video/');
-    },
-    startReply(message) {
-      this.replyTo = { id: message.id, text: message.text || 'вложение', sender: message.sender };
-      this.$nextTick(() => this.$refs.input.focus());
-    },
-    cancelReply() {
-      this.replyTo = null;
-    },
-    async handleAttachment(event) {
-      const files = Array.from(event.target.files);
-      this.attachments.push(...files);
-    },
-    removeAttachment(index) {
-      this.attachments.splice(index, 1);
-    },
-    async sendMessage() {
-      try {
-        const form = new FormData();
-        if (this.newMessage.trim()) form.append('text', this.newMessage);
-        if (this.replyTo) form.append('reply_to_id', this.replyTo.id);
-        this.attachments.forEach(file => form.append('attachments', file));
 
-        if (this.editingMessage) {
-          // Editing existing
-          await axios.patch(
-            `/api/tasks/${this.taskId}/messages/${this.editingMessage.id}/`,
-            form,
-            { headers: { 'Content-Type': 'multipart/form-data', Authorization: `Bearer ${localStorage.getItem('token')}` } }
-          );
-          this.editingMessage = null;
-        } else {
-          // New message
-          await axios.post(
-            `/api/tasks/${this.taskId}/messages/`,
-            form,
-            { headers: { 'Content-Type': 'multipart/form-data', Authorization: `Bearer ${localStorage.getItem('token')}` } }
-          );
+    isImage(type) { return type && type.startsWith('image/') },
+    isVideo(type) { return type && type.startsWith('video/') },
+
+    startReply(message) {
+      this.replyTo = { id: message.id, text: message.text || 'вложение', sender: message.sender }
+      this.$nextTick(() => this.$refs.input.focus())
+    },
+
+    cancelReply() { this.replyTo = null },
+    handleAttachment(e) { this.attachments.push(...Array.from(e.target.files)) },
+    removeAttachment(i) { this.attachments.splice(i, 1) },
+
+    async loadMessages() {
+      if (this.fetchMessages) {
+        await this.fetchMessages()
+      } else if (this.taskId != null) {
+        const { data } = await axios.get(
+          `/api/tasks/${this.taskId}/messages/`, // Исправлено
+          {
+            params: { expand: 'reply_to.sender,attachments' },
+            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } // Исправлено
+          }
+        )
+        this.internalMessages = data
+      }
+    },
+
+    async onSendClick() {
+      const form = new FormData()
+      if (this.newMessage.trim()) form.append('text', this.newMessage)
+      if (this.replyTo) form.append('reply_to_id', this.replyTo.id)
+      this.attachments.forEach(f => form.append('attachments', f))
+
+      if (this.editingMessage) {
+        // PATCH-запрос
+        const updated = this.sendMessage
+          ? await this.sendMessage(this.editingMessage.id, form)
+          : (await axios.patch(
+              `/api/tasks/${this.taskId}/messages/${this.editingMessage.id}/`, // Исправлено
+              form,
+              { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+            )).data
+
+        const idx = this.internalMessages.findIndex(m => m.id === this.editingMessage.id)
+        if (idx !== -1) {
+          this.internalMessages.splice(idx, 1, updated)
         }
-        this.newMessage = '';
-        this.attachments = [];
-        this.replyTo = null;
-        this.cancelEdit();
-        // No manual fetch: update comes via WebSocket
-      } catch (error) {
-        console.error('Error sending message:', error.response && error.response.data);
-        alert(`Ошибка: ${(error.response && error.response.data && error.response.data.error) || 'Неизвестная ошибка'}`);
+        this.editingMessage = null
+      } else {
+        // Optimistic UI
+        const tmpId = Date.now()
+        const tmp = {
+          id: tmpId,
+          text: this.newMessage,
+          sender: this.current,
+          created_at: new Date().toISOString(),
+          attachments: []
+        }
+        this.internalMessages.push(tmp)
+        this.scrollToBottom()
+
+        try {
+          const response = this.sendMessage
+            ? await this.sendMessage(null, form)
+            : await axios.post(
+                `/api/tasks/${this.taskId}/messages/`, // Исправлено
+                form,
+                { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }} // Исправлено
+              )
+          const real = response.data || response
+          const i = this.internalMessages.findIndex(m => m.id === tmpId)
+          if (i !== -1) {
+            this.internalMessages.splice(i, 1, real)
+          }
+          const channel = this.socketQuery.neuroChat ? 'neuro-chat' : 'task'
+          this.socket.emit(`${channel}:message-created`, real)
+        } catch (e) {
+          this.internalMessages = this.internalMessages.filter(m => m.id !== tmpId)
+          throw e
+        }
+      }
+
+      this.newMessage = ''
+      this.attachments = []
+      this.replyTo = null
+    },
+
+    cancelEdit() { this.editingMessage = null },
+
+    async deleteMessage(msg) {
+      if (!confirm('Удалить сообщение?')) return
+
+      this.internalMessages = this.internalMessages.filter(m => m.id !== msg.id)
+
+      if (this.sendMessage) {
+        await this.sendMessage(msg.id, null, 'delete')
+      } else {
+        await axios.delete(
+          `/api/tasks/${this.taskId}/messages/${msg.id}/`, // Исправлено
+          { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }} // Исправлено
+        )
       }
     },
-    cancelEdit() {
-      this.editingMessage = null;
+
+    copyMessage(msg) { navigator.clipboard.writeText(msg.text) },
+    
+    editMessage(msg) {
+      if (msg.is_deleted) return
+      this.editingMessage = msg
+      this.newMessage = msg.text || ''
+      this.replyTo = msg.reply_to ? { ...msg.reply_to } : null
+      this.attachments = msg.attachments.length ? [...msg.attachments] : []
+      this.$refs.input.focus()
     },
-    deleteMessage(message) {
-      if (confirm('Удалить сообщение?')) {
-        axios.delete(`/api/tasks/${this.taskId}/messages/${message.id}/`);
-      }
-    },
-    copyMessage(message) {
-      navigator.clipboard.writeText(message.text);
-    },
-    editMessage(message) {
-      if (message.is_deleted) return;
-      this.editingMessage = message;
-      this.newMessage = message.text || '';
-      this.replyTo = message.reply_to ? { ...message.reply_to } : null;
-      this.attachments = message.attachments.length ? [...message.attachments] : [];
-      this.$refs.input.focus();
-    },
+
     scrollToBottom() {
       this.$nextTick(() => {
-        const el = this.$el.querySelector('.messages-list');
-        el.scrollTop = el.scrollHeight;
-      });
+        const el = this.$el.querySelector('.messages-list')
+        el.scrollTop = el.scrollHeight
+      })
     }
   },
+
   mounted() {
-    // Initial load
-    this.fetchMessages();
+    // 1 создаём и подключаем Socket.IO клиент один раз :contentReference[oaicite:3]{index=3}
+    this.socket = io('http://localhost:8000', {
+      path: '/socket.io',
+      transports: ['websocket'],
+      query: this.socketQuery
+    })
 
-    // Setup WebSocket connection
-    this.socket = io(undefined, { query: { taskId: this.taskId } });
+    // 2 подписываемся на событие connect для отладки :contentReference[oaicite:4]{index=4}
+    this.socket.on('connect', () => {
+      console.log('Socket connected, sid =', this.socket.id)
+    })
 
-    // Listen for new messages
-    this.socket.on('task:message-created', msg => {
-      this.messages.push(msg);
-      this.scrollToBottom();
-    });
-    this.socket.on('task:message-updated', updated => {
-      const idx = this.messages.findIndex(m => m.id === updated.id);
-      if (idx !== -1) this.$set(this.messages, idx, updated);
-    });
-    this.socket.on('task:message-deleted', del => {
-      this.messages = this.messages.filter(m => m.id !== del.id);
-    });
+    const channel = this.socketQuery.neuroChat ? 'neuro-chat' : 'task'
+
+    // 3 при получении нового сообщения — только если ещё нет такого id :contentReference[oaicite:5]{index=5}
+    this.socket.on(`${channel}:message-created`, msg => {
+      if (!this.internalMessages.some(m => m.id === msg.id)) {
+        if (msg.sender.email === 'ai@localhost') {
+          msg.sender.name = 'Нейрочат'
+          msg.sender.avatar = this.iconPath
+        }
+        this.internalMessages.push(msg)
+        this.scrollToBottom()
+      }
+    })
+
+    // 4 обновление сообщения
+    this.socket.on(`${channel}:message-updated`, upd => {
+      const i = this.internalMessages.findIndex(m => m.id === upd.id)
+      if (i !== -1) this.$set(this.internalMessages, i, upd)
+    })
+
+    // 5 удаление сообщения
+    this.socket.on(`${channel}:message-deleted`, d => {
+      this.internalMessages = this.internalMessages.filter(m => m.id !== d.id)
+    })
+
+    // 6 загружаем историю
+    this.loadMessages().then(() => this.scrollToBottom())
   },
+
+
   beforeUnmount() {
-    if (this.socket) this.socket.disconnect();
+    if (this.socket) this.socket.disconnect()
   }
-};
+}
 </script>
 
 
+
 <style scoped>
+.text {
+  /* preserve newlines */
+  white-space: pre-wrap;
+}
+
 .chat-container {
   display: flex;
   flex-direction: column;
@@ -603,5 +661,19 @@ button:has(img[src="/icons/copy-icon.png"]) {
   margin: 10px 0;
   color: #6c757d;
   font-size: 0.9em;
+}
+
+/* стили для индикатора */
+.ai-thinking {
+  text-align: center;
+  padding: 8px;
+  color: #555;
+  font-style: italic;
+}
+
+.ai-spinner {
+  width: 20px;
+  vertical-align: middle;
+  margin-right: 6px;
 }
 </style>

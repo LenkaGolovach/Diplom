@@ -1,0 +1,92 @@
+<!-- src/views/NeuroChat.vue -->
+<template>
+  <DiscussionChat
+    :fetch-messages="fetchMessages"
+    :send-message="sendMessage"
+    :messages="messages"
+    :current-user="currentUser"
+    :socket-query="{ neuroChat: true }"
+    :icon-path="aiAvatar"
+    :ai-thinking="aiThinking"
+  />
+</template>
+
+<script>
+import { ref, watch } from 'vue'
+import { useStore } from 'vuex'
+import axios from 'axios'
+import DiscussionChat from '@/components/DiscussionChat.vue'
+
+export default {
+  name: 'NeuroChat',
+  components: { DiscussionChat },
+  setup() {
+    const store = useStore()
+    const messages = ref([])
+    const aiThinking = ref(false)
+    const aiAvatar = '/icons/ai-avatar.png'
+    const currentUser = ref(store.state.user)
+
+    async function fetchMessages() {
+      const { data } = await axios.get('/api/neuro-chat/', {
+        headers: { 
+          Authorization: `Bearer ${localStorage.getItem('token')}` // Исправлено
+        }
+      })
+      messages.value = data.map(m => {
+        if (m.sender.email === 'ai@localhost') {
+          m.sender.avatar = aiAvatar
+          m.sender.name = 'Нейрочат'
+        }
+        return m
+      })
+    }
+
+    async function sendMessage(messageId, form, action) {
+      aiThinking.value = true
+
+      try {
+        if (action === 'delete') {
+          await axios.delete(`/api/neuro-chat/${messageId}/`, { // Исправлено
+            headers: { 
+              Authorization: `Bearer ${localStorage.getItem('token')}` // Исправлено
+            }
+          })
+        } else {
+          const { data } = await axios.post('/api/neuro-chat/', form, {
+            headers: { 
+              Authorization: `Bearer ${localStorage.getItem('token')}` // Исправлено
+            }
+          })
+          messages.value.push(data)
+          return data
+        }
+      } catch (err) {
+        console.error('NeuroChat.sendMessage error', err)
+        throw err
+      }
+    }
+
+    watch(
+      () => messages.value.length,
+      (newLen, oldLen) => {
+        if (aiThinking.value && newLen > oldLen) {
+          const last = messages.value[messages.value.length - 1]
+          if (last.sender.email === 'ai@localhost') {
+            aiThinking.value = false
+          }
+        }
+      }
+    )
+
+    return {
+      fetchMessages,
+      sendMessage,
+      messages,
+      currentUser,
+      aiAvatar,
+      aiThinking
+    }
+  }
+}
+</script>

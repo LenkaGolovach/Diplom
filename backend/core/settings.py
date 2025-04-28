@@ -102,6 +102,9 @@ CORS_ALLOW_HEADERS = [
 ]
 CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
 
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'amqp://guest:guest@localhost:5672//')
+CELERY_RESULT_BACKEND = 'rpc://'
+
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 

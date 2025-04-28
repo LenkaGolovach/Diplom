@@ -1,4 +1,4 @@
-from rest_framework import viewsets, permissions
+from rest_framework import viewsets, permissions, mixins
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
@@ -25,6 +25,13 @@ from .permissions import IsBoardMember
 from .permissions import IsTaskMember
 from django.db import IntegrityError
 from django.utils import timezone
+from rest_framework.permissions import IsAuthenticated
+from .tasks import generate_ai_response
+import socketio
+import eventlet
+
+# создаём единственный клиент для эмита
+sio = socketio.Client(reconnection=True, reconnection_attempts=5, reconnection_delay=1)
 
 logger = logging.getLogger(__name__) 
 
@@ -299,29 +306,58 @@ class MessageViewSet(viewsets.ModelViewSet):
             'attachments'
         ).order_by('created_at')
     
-    def perform_create(self, serializer):
-        task = get_object_or_404(Task, id=self.kwargs['task_pk'])
-        serializer.save(
-            task=task,
-            sender=self.request.user,
-            id=None  # Явное указание для автоинкремента
-        )
-
     def get_serializer_class(self):
         if self.action == 'partial_update':
             return MessageUpdateSerializer
         return MessageSerializer
 
-    def partial_update(self, request, *args, **kwargs):
-        instance = self.get_object()
-        if instance.sender != request.user:
-            return Response({'error': 'Forbidden'}, status=403)
-        
-        serializer = self.get_serializer(
-            instance,
-            data=request.data,
-            partial=True
-        )
-        serializer.is_valid(raise_exception=True)
-        serializer.save(is_edited=True, edited_at=timezone.now())
-        return Response(serializer.data)
+    def perform_create(self, serializer):
+        # 1) сохраняем сообщение
+        task = get_object_or_404(Task, id=self.kwargs['task_pk'])
+        msg = serializer.save(task=task, sender=self.request.user)
+        # 2) готовим payload
+        payload = MessageSerializer(msg, context={'request': self.request}).data
+        # 3) эмитим событие в канал 'task:message-created' :contentReference[oaicite:8]{index=8}
+        if not sio.connected:
+            sio.connect('http://127.0.0.1:8000')
+        sio.emit('task:message-created', payload, namespace='/')  # :contentReference[oaicite:9]{index=9}
+        eventlet.sleep(0)  # даём eventlet-циклу время на отправку :contentReference[oaicite:10]{index=10}
+        sio.disconnect()
+
+    def perform_update(self, serializer):
+        msg = serializer.save(is_edited=True)
+        payload = MessageSerializer(msg, context={'request': self.request}).data
+        if not sio.connected: sio.connect('http://127.0.0.1:8000')
+        sio.emit('task:message-updated', payload, namespace='/')
+        eventlet.sleep(0)
+        sio.disconnect()
+
+    def perform_destroy(self, instance):
+        msg_id = instance.id
+        instance.delete()
+        if not sio.connected: sio.connect('http://127.0.0.1:8000')
+        sio.emit('task:message-deleted', {'id': msg_id}, namespace='/')
+        eventlet.sleep(0)
+        sio.disconnect()
+
+class NeuroChatViewSet(mixins.ListModelMixin,
+                       mixins.CreateModelMixin,
+                       viewsets.GenericViewSet):
+    """
+    ViewSet для нейрочата: список сообщений и создание нового сообщения пользователя,
+    по которому запускается фоновые размышления ИИ.
+    """
+    queryset = Message.objects.filter(neuro_chat=True).order_by('created_at')
+    serializer_class = MessageSerializer
+    permission_classes = [IsAuthenticated]
+
+    def perform_create(self, serializer):
+        msg = serializer.save(sender=self.request.user, neuro_chat=True)
+        payload = MessageSerializer(msg, context={'request': self.request}).data
+        # эмитим событие нейрочата сразу :contentReference[oaicite:13]{index=13}
+        if not sio.connected:
+            sio.connect('http://127.0.0.1:8000')
+        sio.emit('neuro-chat:message-created', payload, namespace='/')
+        eventlet.sleep(0)
+        sio.disconnect()
+        generate_ai_response.delay(msg.id)

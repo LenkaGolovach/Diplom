@@ -132,7 +132,13 @@ class FileAttachment(models.Model):
 
 class Message(models.Model):
     id = models.BigAutoField(primary_key=True, editable=False)  # Явное определение
-    task = models.ForeignKey(Task, on_delete=models.CASCADE)
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        help_text="Если NULL — это сообщение нейрочата"
+    )
     sender = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
     text = models.TextField(blank=True, null=True)
     reply_to = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL)
@@ -140,6 +146,10 @@ class Message(models.Model):
     is_deleted = models.BooleanField(default=False)
     is_edited = models.BooleanField(default=False)
     edited_at = models.DateTimeField(null=True, blank=True)
+    neuro_chat = models.BooleanField(
+        default=False,
+        help_text="Отметка, что сообщение относится к нейрочату"
+    )
 
     class Meta:
         ordering = ['created_at']

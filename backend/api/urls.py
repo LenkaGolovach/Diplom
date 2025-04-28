@@ -11,7 +11,8 @@ from .views import (
     UserViewSet,
     BoardMembersViewSet,
     TaskMemberViewSet,
-    MessageViewSet
+    MessageViewSet,
+    NeuroChatViewSet
 )
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -26,6 +27,8 @@ router.register(r'tasks', TaskViewSet, basename='task')
 router.register(r'boards/(?P<board_id>\d+)/members', BoardMembersViewSet, basename='board-members')
 router.register(r'tasks/(?P<task_pk>\d+)/members', TaskMemberViewSet, basename='taskmembers')
 router.register(r'tasks/(?P<task_pk>\d+)/messages', MessageViewSet, basename='task-messages')
+router.register(r'neuro-chat', NeuroChatViewSet, basename='neuro-chat')
+
 
 urlpatterns = [
     path('auth/login/', LoginView.as_view(), name='login'),
