@@ -320,7 +320,7 @@ class MessageViewSet(viewsets.ModelViewSet):
         # 3) эмитим событие в канал 'task:message-created' :contentReference[oaicite:8]{index=8}
         if not sio.connected:
             sio.connect('http://127.0.0.1:8000')
-        sio.emit('task:message-created', payload, namespace='/')  # :contentReference[oaicite:9]{index=9}
+        #sio.emit('task:message-created', payload, namespace='/')  # :contentReference[oaicite:9]{index=9}
         eventlet.sleep(0)  # даём eventlet-циклу время на отправку :contentReference[oaicite:10]{index=10}
         sio.disconnect()
 

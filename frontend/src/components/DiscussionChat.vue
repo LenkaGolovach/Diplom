@@ -120,7 +120,7 @@ export default {
     fetchMessages: { type: Function, default: null },
     sendMessage: { type: Function, default: null },
     messages: { type: Array, default: null },
-    currentUser: { type: Object, default: () => ({ id: null }) },  // безопасный дефолт
+    currentUser: { type: Object, default: () => ({ id: null }) },  
     iconPath: { type: String, default: '/default-avatar.png' },
     socketQuery: { type: Object, default: () => ({}) },
     aiThinking: { type: Boolean, default: false }
@@ -144,10 +144,9 @@ export default {
       return this.currentUser.id != null ? this.currentUser : this.user  
     },
 
+    // Always render internalMessages, which we initialize from props or load
     allMessages() {
-      return Array.isArray(this.messages)
-        ? this.messages
-        : this.internalMessages
+      return this.internalMessages
     },
 
     isMessageValid() {
@@ -192,12 +191,16 @@ export default {
     async loadMessages() {
       if (this.fetchMessages) {
         await this.fetchMessages()
+        // Sync fetched prop messages into internalMessages
+        if (Array.isArray(this.messages)) {
+          this.internalMessages = [...this.messages]
+        }
       } else if (this.taskId != null) {
         const { data } = await axios.get(
-          `/api/tasks/${this.taskId}/messages/`, // Исправлено
+          `/api/tasks/${this.taskId}/messages/`,
           {
             params: { expand: 'reply_to.sender,attachments' },
-            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } // Исправлено
+            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
           }
         )
         this.internalMessages = data
@@ -301,47 +304,78 @@ export default {
   },
 
   mounted() {
-    // 1 создаём и подключаем Socket.IO клиент один раз :contentReference[oaicite:3]{index=3}
     this.socket = io('http://localhost:8000', {
       path: '/socket.io',
       transports: ['websocket'],
       query: this.socketQuery
     })
 
-    // 2 подписываемся на событие connect для отладки :contentReference[oaicite:4]{index=4}
+    if (this.socketQuery && this.socketQuery.neuroChat) {
+    this.socket.on('neuro-chat:message-created', (msg) => {
+      if (msg && msg.id) {
+        const exists = this.internalMessages.some(m => m.id === msg.id)
+        if (!exists) {
+          msg.sender = {
+            ...msg.sender,
+            name: 'Нейрочат',
+            avatar: this.iconPath
+          }
+          this.internalMessages.push(msg)
+          this.scrollToBottom()
+        }
+      }
+    })
+  }
+
     this.socket.on('connect', () => {
       console.log('Socket connected, sid =', this.socket.id)
     })
 
-    const channel = this.socketQuery.neuroChat ? 'neuro-chat' : 'task'
+    const channel = this.socketQuery && this.socketQuery.neuroChat ? 'neuro-chat' : 'task'
 
-    // 3 при получении нового сообщения — только если ещё нет такого id :contentReference[oaicite:5]{index=5}
-    this.socket.on(`${channel}:message-created`, msg => {
-      if (!this.internalMessages.some(m => m.id === msg.id)) {
-        if (msg.sender.email === 'ai@localhost') {
-          msg.sender.name = 'Нейрочат'
-          msg.sender.avatar = this.iconPath
+    this.socket.on(channel + ':message-created', msg => {
+      if (msg && msg.id && this.internalMessages) {
+        let exists = false
+        for (let i = 0; i < this.internalMessages.length; i++) {
+          if (this.internalMessages[i].id === msg.id) {
+            exists = true
+            break
+          }
         }
-        this.internalMessages.push(msg)
-        this.scrollToBottom()
+        if (!exists) {
+          if (msg.sender && msg.sender.email === 'ai@localhost') {
+            msg.sender.name = 'Нейрочат'
+            msg.sender.avatar = this.iconPath
+          }
+          this.internalMessages.push(msg)
+          this.scrollToBottom()
+        }
       }
     })
 
-    // 4 обновление сообщения
-    this.socket.on(`${channel}:message-updated`, upd => {
-      const i = this.internalMessages.findIndex(m => m.id === upd.id)
-      if (i !== -1) this.$set(this.internalMessages, i, upd)
+    this.socket.on(channel + ':message-updated', upd => {
+      if (upd && upd.id && this.internalMessages) {
+        for (let i = 0; i < this.internalMessages.length; i++) {
+          if (this.internalMessages[i].id === upd.id) {
+            this.$set(this.internalMessages, i, upd)
+            break
+          }
+        }
+      }
     })
 
-    // 5 удаление сообщения
-    this.socket.on(`${channel}:message-deleted`, d => {
-      this.internalMessages = this.internalMessages.filter(m => m.id !== d.id)
+    this.socket.on(channel + ':message-deleted', d => {
+      if (d && d.id && this.internalMessages) {
+        this.internalMessages = this.internalMessages.filter(function(m) {
+          return m.id !== d.id
+        })
+      }
     })
 
-    // 6 загружаем историю
-    this.loadMessages().then(() => this.scrollToBottom())
+    this.loadMessages().then(() => {
+      this.scrollToBottom()
+    })
   },
-
 
   beforeUnmount() {
     if (this.socket) this.socket.disconnect()
