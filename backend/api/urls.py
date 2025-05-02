@@ -10,7 +10,8 @@ from .views import (
     RegisterView,
     UserViewSet,
     BoardMembersViewSet,
-    TaskMemberViewSet
+    TaskMemberViewSet,
+    ReportsView
 )
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -35,6 +36,7 @@ urlpatterns = [
     path('tasks/<int:pk>/', TaskViewSet.as_view({'get': 'retrieve', 'put': 'update', 'patch': 'partial_update', 'delete': 'destroy'})),
     path('api/boards/check_invite/', BoardViewSet.as_view({'get': 'check_invite'})),
     path('api/boards/join/', BoardViewSet.as_view({'post': 'join'})),
+    path('reports/', ReportsView.as_view(), name='reports'),
 ]
 
 # Добавляем URL для загрузки файлов

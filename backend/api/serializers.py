@@ -58,11 +58,39 @@ class TaskSerializer(serializers.ModelSerializer):
         write_only=True
     )
     members = TaskMemberSerializer(many=True, read_only=True)
+    column_name = serializers.CharField(source='column.name', read_only=True)
+    board_name = serializers.CharField(source='column.board.name', read_only=True)
+    priority = serializers.ChoiceField(choices=Task.PRIORITY_CHOICES, required=False, default='medium')
 
     class Meta:
         model = Task
-        fields = '__all__'
+        fields = ['id', 'name', 'description', 'column', 'column_name', 'board_name', 
+                 'created_at', 'updated_at', 'subtasks', 'attachments', 'deleted_files', 'members', 'priority']
         read_only_fields = ['created_at', 'updated_at']
+        extra_kwargs = {
+            'description': {'required': False, 'allow_blank': True, 'allow_null': True},
+            'column': {'required': True},
+            'name': {'required': True},
+            'order': {'required': False, 'default': 0, 'allow_null': True}
+        }
+
+    def validate(self, data):
+        # Проверяем наличие обязательных полей
+        if not data.get('name'):
+            raise serializers.ValidationError({'name': 'Название задачи обязательно'})
+        
+        if not data.get('column'):
+            raise serializers.ValidationError({'column': 'Колонка обязательна'})
+        
+        # Проверяем, что колонка существует и пользователь имеет к ней доступ
+        try:
+            column = Column.objects.get(id=data['column'].id if isinstance(data['column'], Column) else data['column'])
+            if not column.board.members.filter(user=self.context['request'].user).exists():
+                raise serializers.ValidationError({'column': 'У вас нет доступа к этой колонке'})
+        except Column.DoesNotExist:
+            raise serializers.ValidationError({'column': 'Колонка не найдена'})
+        
+        return data
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
@@ -75,101 +103,110 @@ class TaskSerializer(serializers.ModelSerializer):
         return representation
 
     def create(self, validated_data):
-        subtasks_data = validated_data.pop('subtasks', [])
-        request = self.context.get('request')
-        
-        # Обрабатываем JSON-строку подзадач
-        if request and 'subtasks' in request.data:
-            if isinstance(request.data['subtasks'], str):
-                try:
-                    import json
-                    subtasks_data = json.loads(request.data['subtasks'])
-                except json.JSONDecodeError:
-                    pass
-        
-        task = Task.objects.create(**validated_data)
-        
-        # Создаем подзадачи
-        for subtask_data in subtasks_data:
-            SubTask.objects.create(
-                task=task,
-                name=subtask_data.get('name', ''),
-                completed=subtask_data.get('completed', False)
-            )
-        
-        # Добавляем файлы вложений
-        files = request.FILES.getlist('attachments') if request else []
-        for file in files:
-            FileAttachment.objects.create(
-                task=task,
-                file=file,
-                name=file.name
-            )
-        
-        return task
+        try:
+            subtasks_data = validated_data.pop('subtasks', [])
+            request = self.context.get('request')
+            
+            # Обрабатываем JSON-строку подзадач
+            if request and 'subtasks' in request.data:
+                if isinstance(request.data['subtasks'], str):
+                    try:
+                        import json
+                        subtasks_data = json.loads(request.data['subtasks'])
+                    except json.JSONDecodeError:
+                        raise serializers.ValidationError({'subtasks': 'Неверный формат подзадач'})
+            
+            task = Task.objects.create(**validated_data)
+            
+            # Создаем подзадачи, если они есть
+            if subtasks_data:
+                for subtask_data in subtasks_data:
+                    SubTask.objects.create(
+                        task=task,
+                        name=subtask_data.get('name', ''),
+                        completed=subtask_data.get('completed', False)
+                    )
+            
+            # Добавляем файлы вложений, если они есть
+            files = request.FILES.getlist('attachments') if request else []
+            if files:
+                for file in files:
+                    FileAttachment.objects.create(
+                        task=task,
+                        file=file,
+                        name=file.name
+                    )
+            
+            return task
+        except Exception as e:
+            logger.error(f"Error creating task: {str(e)}")
+            raise serializers.ValidationError({'error': str(e)})
 
     def update(self, instance, validated_data):
-        subtasks_data = validated_data.pop('subtasks', [])
-        request = self.context.get('request')
-        deleted_files = validated_data.pop('deleted_files', [])
-        if deleted_files:
-            FileAttachment.objects.filter(id__in=deleted_files, task=instance).delete()
+        try:
+            subtasks_data = validated_data.pop('subtasks', [])
+            request = self.context.get('request')
+            deleted_files = validated_data.pop('deleted_files', [])
+            if deleted_files:
+                FileAttachment.objects.filter(id__in=deleted_files, task=instance).delete()
 
-        # Обрабатываем JSON-строку подзадач
-        if request and 'subtasks' in request.data:
-            if isinstance(request.data['subtasks'], str):
-                try:
-                    import json
-                    subtasks_data = json.loads(request.data['subtasks'])
-                except json.JSONDecodeError:
-                    import logging
-                    logger = logging.getLogger(__name__)
-                    logger.error(f"Failed to parse subtasks JSON: {request.data['subtasks']}")
+            # Обрабатываем JSON-строку подзадач
+            if request and 'subtasks' in request.data:
+                if isinstance(request.data['subtasks'], str):
+                    try:
+                        import json
+                        subtasks_data = json.loads(request.data['subtasks'])
+                    except json.JSONDecodeError:
+                        raise serializers.ValidationError({'subtasks': 'Неверный формат подзадач'})
+            
+            # Обновляем основные данные задачи
+            for attr, value in validated_data.items():
+                setattr(instance, attr, value)
+            instance.save()
+            
+            # Обрабатываем подзадачи, если они есть
+            if subtasks_data:
+                existing_subtasks = {s.id: s for s in instance.subtasks.all()}
+                subtasks_to_keep = []
+                
+                # Обновление/создание подзадач
+                for subtask_data in subtasks_data:
+                    subtask_id = subtask_data.get('id')
+                    if subtask_id and subtask_id in existing_subtasks:
+                        # Обновляем существующую подзадачу
+                        subtask = existing_subtasks[subtask_id]
+                        subtask.name = subtask_data.get('name', subtask.name)
+                        subtask.completed = subtask_data.get('completed', subtask.completed)
+                        subtask.save()
+                        subtasks_to_keep.append(subtask.id)
+                    else:
+                        # Создаем новую подзадачу
+                        new_subtask = SubTask.objects.create(
+                            task=instance,
+                            name=subtask_data.get('name', ''),
+                            completed=subtask_data.get('completed', False)
+                        )
+                        subtasks_to_keep.append(new_subtask.id)
+                
+                # Удаляем подзадачи, которые не в списке сохраняемых
+                for subtask_id, subtask in existing_subtasks.items():
+                    if subtask_id not in subtasks_to_keep:
+                        subtask.delete()
+            
+            # Обрабатываем файлы вложений, если они есть
+            files = request.FILES.getlist('attachments') if request else []
+            if files:
+                for file in files:
+                    FileAttachment.objects.create(
+                        task=instance,
+                        file=file,
+                        name=file.name
+                    )
         
-        # Обновляем основные данные задачи
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-        
-        # Обрабатываем подзадачи
-        existing_subtasks = {s.id: s for s in instance.subtasks.all()}
-        
-        subtasks_to_keep = []
-        
-        # Обновление/создание подзадач
-        for subtask_data in subtasks_data:
-            subtask_id = subtask_data.get('id')
-            if subtask_id and subtask_id in existing_subtasks:
-                # Обновляем существующую подзадачу
-                subtask = existing_subtasks[subtask_id]
-                subtask.name = subtask_data.get('name', subtask.name)
-                subtask.completed = subtask_data.get('completed', subtask.completed)
-                subtask.save()
-                subtasks_to_keep.append(subtask.id)
-            else:
-                # Создаем новую подзадачу
-                new_subtask = SubTask.objects.create(
-                    task=instance,
-                    name=subtask_data.get('name', ''),
-                    completed=subtask_data.get('completed', False)
-                )
-                subtasks_to_keep.append(new_subtask.id)
-        
-        # Удаляем подзадачи, которые не в списке сохраняемых
-        for subtask_id, subtask in existing_subtasks.items():
-            if subtask_id not in subtasks_to_keep:
-                subtask.delete()
-        
-        # Обрабатываем файлы вложений
-        files = request.FILES.getlist('attachments') if request else []
-        for file in files:
-            FileAttachment.objects.create(
-                task=instance,
-                file=file,
-                name=file.name
-            )
-    
-        return instance
+            return instance
+        except Exception as e:
+            logger.error(f"Error updating task: {str(e)}")
+            raise serializers.ValidationError({'error': str(e)})
 
 class ColumnSerializer(serializers.ModelSerializer):
     tasks = TaskSerializer(many=True, read_only=True)
@@ -207,3 +244,127 @@ class BoardSerializer(serializers.ModelSerializer):
             "email": obj.owner.email,
             "avatar": obj.owner.avatar.url if obj.owner.avatar else None
         }
+
+class TaskReportSerializer(serializers.ModelSerializer):
+    project = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
+    members = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Task
+        fields = ['id', 'name', 'project', 'status', 'priority', 'created_at', 'updated_at', 'members']
+    
+    def get_project(self, obj):
+        return obj.column.board.name if obj.column and obj.column.board else '-'
+    
+    def get_status(self, obj):
+        try:
+            if obj.column.name == 'Готово':
+                return 'Выполнено'
+            elif obj.column.name == 'В процессе':
+                return 'В процессе'
+            elif obj.subtasks.exists():
+                completed_subtasks = obj.subtasks.filter(completed=True).count()
+                total_subtasks = obj.subtasks.count()
+                if completed_subtasks == 0:
+                    return 'Не начато'
+                elif completed_subtasks == total_subtasks:
+                    return 'Выполнено'
+                else:
+                    return 'В процессе'
+            else:
+                return 'Не начато'
+        except Exception as e:
+            logger.error(f"Error getting task status: {str(e)}", exc_info=True)
+            return 'Ошибка'
+    
+    def get_members(self, obj):
+        try:
+            return [member.email for member in obj.members.all()]
+        except Exception as e:
+            logger.error(f"Error getting task members: {str(e)}", exc_info=True)
+            return []
+
+class ProjectReportSerializer(serializers.ModelSerializer):
+    totalTasks = serializers.SerializerMethodField()
+    completedTasks = serializers.SerializerMethodField()
+    inProgressTasks = serializers.SerializerMethodField()
+    members = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Board
+        fields = ['id', 'name', 'created_at', 'updated_at', 
+                 'totalTasks', 'completedTasks', 'inProgressTasks', 'members', 'status']
+
+    def get_totalTasks(self, obj):
+        try:
+            return Task.objects.filter(column__board=obj).count()
+        except Exception as e:
+            logger.error(f"Error getting total tasks: {str(e)}", exc_info=True)
+            return 0
+
+    def get_completedTasks(self, obj):
+        try:
+            # Считаем задачи в колонке "Готово" как завершенные
+            return Task.objects.filter(column__board=obj, column__name='Готово').count()
+        except Exception as e:
+            logger.error(f"Error getting completed tasks: {str(e)}", exc_info=True)
+            return 0
+
+    def get_inProgressTasks(self, obj):
+        try:
+            # Считаем задачи в колонке "В процессе" как выполняющиеся
+            return Task.objects.filter(column__board=obj, column__name='В процессе').count()
+        except Exception as e:
+            logger.error(f"Error getting in progress tasks: {str(e)}", exc_info=True)
+            return 0
+
+    def get_members(self, obj):
+        try:
+            return [{'id': member.user.id, 'username': member.user.email} for member in obj.members.all()]
+        except Exception as e:
+            logger.error(f"Error getting members: {str(e)}", exc_info=True)
+            return []
+
+    def get_status(self, obj):
+        try:
+            total_tasks = self.get_totalTasks(obj)
+            completed_tasks = self.get_completedTasks(obj)
+            
+            if total_tasks == 0:
+                return 'Нет задач'
+            elif completed_tasks == total_tasks:
+                return 'Завершён'
+            else:
+                return 'В процессе'
+        except Exception as e:
+            logger.error(f"Error getting status: {str(e)}", exc_info=True)
+            return 'Ошибка'
+
+class MemberReportSerializer(serializers.ModelSerializer):
+    totalTasks = serializers.SerializerMethodField()
+    completedTasks = serializers.SerializerMethodField()
+    inProgressTasks = serializers.SerializerMethodField()
+    projects = serializers.SerializerMethodField()
+    lastActivity = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = CustomUser
+        fields = ['id', 'email', 'totalTasks', 'completedTasks', 'inProgressTasks', 'projects', 'lastActivity']
+    
+    def get_totalTasks(self, obj):
+        return Task.objects.filter(members=obj).count()
+    
+    def get_completedTasks(self, obj):
+        return Task.objects.filter(members=obj, column__name='Готово').count()
+    
+    def get_inProgressTasks(self, obj):
+        return Task.objects.filter(members=obj, column__name='В процессе').count()
+    
+    def get_projects(self, obj):
+        return [board.name for board in Board.objects.filter(members__user=obj)]
+    
+    def get_lastActivity(self, obj):
+        last_task = Task.objects.filter(members=obj).order_by('-updated_at').first()
+        return last_task.updated_at if last_task else None

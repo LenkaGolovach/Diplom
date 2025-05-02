@@ -4,9 +4,14 @@ from rest_framework.views import APIView
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
-from .models import Board, Column, Task
-from .serializers import BoardSerializer, ColumnSerializer, TaskSerializer, UserSerializer, BoardMemberSerializer, TaskMemberSerializer
-from .models import CustomUser, FileAttachment, BoardMember, TaskMember
+from .models import Board, Column, Task, CustomUser, BoardMember
+from .serializers import (
+    BoardSerializer, ColumnSerializer, TaskSerializer, UserSerializer,
+    BoardMemberSerializer, TaskMemberSerializer, ProjectReportSerializer,
+    TaskReportSerializer, MemberReportSerializer
+)
+from .models import FileAttachment
+from .filters import TaskFilter
 import logging
 import json
 from django.contrib.auth import get_user_model
@@ -22,6 +27,8 @@ from rest_framework.exceptions import PermissionDenied
 from django.conf import settings
 from django.db.models import Q
 from .permissions import IsBoardMember
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.permissions import IsAuthenticated
 
 logger = logging.getLogger(__name__) 
 
@@ -160,11 +167,18 @@ class TaskViewSet(viewsets.ModelViewSet):
     serializer_class = TaskSerializer
     permission_classes = [permissions.IsAuthenticated, IsBoardMember]
     parser_classes = (MultiPartParser, JSONParser)
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = TaskFilter
 
     def get_queryset(self):
-        return Task.objects.filter(
-            column__board__members__user=self.request.user  # Проверяем, что пользователь в списках участников доски
+        queryset = Task.objects.filter(
+            column__board__members__user=self.request.user
         ).prefetch_related('subtasks', 'attachments')
+        
+        # Применяем фильтры
+        queryset = self.filter_queryset(queryset)
+        
+        return queryset
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -277,3 +291,105 @@ class UserViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return CustomUser.objects.filter(id=self.request.user.id)
+
+class ReportsView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        try:
+            report_type = request.query_params.get('report_type')
+            board_id = request.query_params.get('board_id')
+            task_id = request.query_params.get('task_id')
+
+            logger.info(f"Generating report: type={report_type}, board_id={board_id}, task_id={task_id}")
+
+            if not report_type:
+                logger.error("Report type is required")
+                return Response({'error': 'Report type is required'}, status=400)
+
+            if report_type == 'tasks':
+                if not task_id:
+                    logger.error("Task ID is required for task report")
+                    return Response({'error': 'Task ID is required'}, status=400)
+                
+                try:
+                    task = Task.objects.get(id=task_id)
+                    logger.info(f"Found task: {task.id} - {task.name}")
+                    data = TaskReportSerializer(task).data
+                    logger.info(f"Task report data: {data}")
+                    return Response(data)
+                except Task.DoesNotExist:
+                    logger.error(f"Task not found: {task_id}")
+                    return Response({'error': 'Task not found'}, status=404)
+                except Exception as e:
+                    logger.error(f"Error generating task report: {str(e)}", exc_info=True)
+                    return Response({'error': str(e)}, status=500)
+
+            elif report_type == 'projects':
+                if not board_id:
+                    logger.error("Board ID is required for project report")
+                    return Response({'error': 'Board ID is required'}, status=400)
+                
+                try:
+                    board = Board.objects.get(id=board_id)
+                    logger.info(f"Found board: {board.id} - {board.name}")
+                    
+                    # Получаем статистику
+                    total_tasks = Task.objects.filter(column__board=board).count()
+                    completed_tasks = Task.objects.filter(column__board=board, column__name='Готово').count()
+                    in_progress_tasks = Task.objects.filter(column__board=board, column__name='В процессе').count()
+                    
+                    logger.info(f"Board statistics: total={total_tasks}, completed={completed_tasks}, in_progress={in_progress_tasks}")
+                    
+                    data = {
+                        'projects': [ProjectReportSerializer(board).data],
+                        'statistics': {
+                            'total_projects': 1,
+                            'active_projects': 1 if in_progress_tasks > 0 else 0,
+                            'completed_projects': 1 if completed_tasks == total_tasks and total_tasks > 0 else 0
+                        }
+                    }
+                    logger.info(f"Project report data: {data}")
+                    return Response(data)
+                except Board.DoesNotExist:
+                    logger.error(f"Board not found: {board_id}")
+                    return Response({'error': 'Board not found'}, status=404)
+                except Exception as e:
+                    logger.error(f"Error generating project report: {str(e)}", exc_info=True)
+                    return Response({'error': str(e)}, status=500)
+
+            elif report_type == 'members':
+                if not board_id:
+                    logger.error("Board ID is required for member report")
+                    return Response({'error': 'Board ID is required'}, status=400)
+                
+                try:
+                    board = Board.objects.get(id=board_id)
+                    logger.info(f"Found board: {board.id} - {board.name}")
+                    
+                    members = board.members.all()
+                    logger.info(f"Found {members.count()} members")
+                    
+                    data = {
+                        'members': [MemberReportSerializer(member.user).data for member in members],
+                        'statistics': {
+                            'total_members': members.count(),
+                            'active_members': members.filter(user__task__column__board=board).distinct().count()
+                        }
+                    }
+                    logger.info(f"Member report data: {data}")
+                    return Response(data)
+                except Board.DoesNotExist:
+                    logger.error(f"Board not found: {board_id}")
+                    return Response({'error': 'Board not found'}, status=404)
+                except Exception as e:
+                    logger.error(f"Error generating member report: {str(e)}", exc_info=True)
+                    return Response({'error': str(e)}, status=500)
+
+            else:
+                logger.error(f"Invalid report type: {report_type}")
+                return Response({'error': 'Invalid report type'}, status=400)
+
+        except Exception as e:
+            logger.error(f"Unexpected error in report generation: {str(e)}", exc_info=True)
+            return Response({'error': str(e)}, status=500)

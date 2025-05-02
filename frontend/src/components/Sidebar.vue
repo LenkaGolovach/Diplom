@@ -1,47 +1,53 @@
 <template>
   <div class="sidebar" :class="{ 'sidebar-open': isOpen }">
-    <div class="user-info" v-if="user">
-      <img :src="avatarUrl" class="avatar" alt="Avatar">
-      <div class="user-name">{{ fullName }}</div>
+    <div class="sidebar-header">
+      <h2>Меню</h2>
     </div>
-    
-    <nav class="menu">
-      <router-link to="/profile" class="menu-item">
-        <span class="icon">👤</span> Профиль
+    <div class="sidebar-content">
+      <router-link to="/boards" class="sidebar-item">
+        <span>Доски</span>
       </router-link>
-      <router-link to="/boards" class="menu-item">
-        <span class="icon">📋</span> Проекты
+      <router-link to="/search" class="sidebar-item">
+        <span>Поиск задач</span>
       </router-link>
-    </nav>
-
-    <button class="logout-btn" @click="logout">
-      <span class="icon">🚪</span> Выйти
-    </button>
+      <div class="user-info" v-if="currentUser">
+        <img :src="currentUser.avatar" alt="Avatar" class="avatar" v-if="currentUser.avatar">
+        <div class="user-details">
+          <span class="user-name">{{ currentUser.first_name }} {{ currentUser.last_name }}</span>
+          <span class="user-email">{{ currentUser.email }}</span>
+        </div>
+        <button @click="logout" class="logout-button">Выйти</button>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
+import { computed } from 'vue'
+import { useStore } from 'vuex'
+import { useRouter } from 'vue-router'
+
 export default {
-  computed: {
-    user() {
-      return this.$store.state.user;
-    },
-    fullName() {
-      if (!this.user) return '';
-      return [this.user.first_name, this.user.last_name].filter(Boolean).join(' ') || this.user.email;
-    },
-    avatarUrl() {
-      if (!this.user) return 'https://www.gravatar.com/avatar/?d=identicon';
-      return this.user.avatar_url || 'https://www.gravatar.com/avatar/?d=identicon';
+  name: 'Sidebar',
+  props: {
+    isOpen: {
+      type: Boolean,
+      required: true
     }
   },
-  props: {
-    isOpen: Boolean,
-  },
-  methods: {
-    logout() {
-      this.$store.dispatch('logout');
-      this.$router.push('/login');
+  setup() {
+    const store = useStore()
+    const router = useRouter()
+    const currentUser = computed(() => store.getters.currentUser)
+
+    const logout = async () => {
+      await store.dispatch('logout')
+      router.push('/login')
+    }
+
+    return {
+      currentUser,
+      logout
     }
   }
 }
@@ -50,14 +56,13 @@ export default {
 <style scoped>
 .sidebar {
   position: fixed;
-  left: -270px;
   top: 0;
-  bottom: 0;
+  left: -250px;
   width: 250px;
-  background: #fff;
-  box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+  height: 100vh;
+  background-color: #f5f5f5;
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
   transition: 0.3s;
-  padding: 20px;
   z-index: 1000;
 }
 
@@ -65,57 +70,79 @@ export default {
   left: 0;
 }
 
-.avatar {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  margin-bottom: 15px;
-  object-fit: cover;
+.sidebar-header {
+  padding: 20px;
+  border-bottom: 1px solid #ddd;
 }
 
-.user-name {
-  font-weight: 500;
-  margin-bottom: 20px;
+.sidebar-header h2 {
+  margin: 0;
+  font-size: 1.5em;
 }
 
-.menu-item {
+.sidebar-content {
+  padding: 20px;
+}
+
+.sidebar-item {
   display: block;
-  padding: 12px;
+  padding: 10px;
   color: #333;
   text-decoration: none;
   border-radius: 4px;
-  margin: 20px 0;
-  transition: background 0.2s;
+  margin-bottom: 5px;
+  transition: background-color 0.3s;
 }
 
-.menu-item:hover {
-  background: #f5f5f5;
+.sidebar-item:hover {
+  background-color: #e0e0e0;
 }
 
-.menu-item.router-link-exact-active {
-  background: #e3f2fd;
-  color: #1976d2;
+.sidebar-item.router-link-active {
+  background-color: #e0e0e0;
+  font-weight: bold;
 }
 
-.icon {
-  margin-right: 10px;
+.user-info {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #ddd;
 }
 
-.logout-btn {
-  position: absolute;
-  bottom: 20px;
-  width: calc(100% - 40px);
-  left: 20px;
-  right: 20px;
-  padding: 12px;
-  background: #f8f9fa;
-  border: 1px solid #ddd;
+.avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  margin-bottom: 10px;
+}
+
+.user-details {
+  margin-bottom: 10px;
+}
+
+.user-name {
+  display: block;
+  font-weight: bold;
+}
+
+.user-email {
+  display: block;
+  font-size: 0.9em;
+  color: #666;
+}
+
+.logout-button {
+  width: 100%;
+  padding: 8px;
+  background-color: #ff4444;
+  color: white;
+  border: none;
   border-radius: 4px;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background-color 0.3s;
 }
 
-.logout-btn:hover {
-  background: #e9ecef;
+.logout-button:hover {
+  background-color: #cc0000;
 }
 </style>
