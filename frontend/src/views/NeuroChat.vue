@@ -15,6 +15,7 @@
 import { ref, watch } from 'vue'
 import { useStore } from 'vuex'
 import axios from 'axios'
+import { io } from 'socket.io-client'
 import DiscussionChat from '@/components/DiscussionChat.vue'
 
 export default {
@@ -26,6 +27,11 @@ export default {
     const aiThinking = ref(false)
     const aiAvatar = '/icons/ai-avatar.png'
     const currentUser = ref(store.state.user)
+
+    const socket = io('http://localhost:8000', {
+      transports: ['websocket'],
+      query: { neuroChat: true }
+    })
 
     async function fetchMessages() {
       const { data } = await axios.get('/api/neuro-chat/', {
@@ -58,7 +64,7 @@ export default {
               Authorization: `Bearer ${localStorage.getItem('token')}` // Исправлено
             }
           })
-          messages.value.push(data)
+          socket.emit('neuro-chat:message-created', data)
           return data
         }
       } catch (err) {

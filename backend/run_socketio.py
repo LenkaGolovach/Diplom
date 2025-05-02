@@ -40,8 +40,8 @@ def disconnect(sid):
 # --- Relay для нейрочата (оставляем ваш) ---
 @sio.on('neuro-chat:message-created')
 def handle_neuro_message_created(sid, data):
-    print("Received from Celery (neuro):", data)
-    sio.emit('neuro-chat:message-created', data) 
+    print(f"[NeuroChat] Broadcasting message ID {data.get('id')}")
+    sio.emit('neuro-chat:message-created', data, skip_sid=sid) 
 
 # --- NEW: Relay для задач ---
 @sio.on('task:message-created')

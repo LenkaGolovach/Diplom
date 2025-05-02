@@ -64,10 +64,6 @@
       </template>
     </div>
 
-    <div v-if="aiThinking" class="ai-thinking">
-      <img src="/icons/ai-spinner.gif" alt="loading" class="ai-spinner" />
-      ИИ отвечает…
-   </div>
 
     <div class="chat-input-area">
       <div v-if="replyTo" class="replying-to">
@@ -141,7 +137,9 @@ export default {
     ...mapState(['user']),  
 
     current() {
-      return this.currentUser.id != null ? this.currentUser : this.user  
+      const cu = this.currentUser || {}
+      const storeUser = this.user || {}
+      return (cu.id != null) ? cu : storeUser
     },
 
     // Always render internalMessages, which we initialize from props or load
@@ -190,7 +188,11 @@ export default {
 
     async loadMessages() {
       if (this.fetchMessages) {
-        await this.fetchMessages()
+        try {
+          await this.fetchMessages()
+        } catch (err) {
+          console.warn('DiscussionChat: не смогли fetchMessages()', err)
+        }
         // Sync fetched prop messages into internalMessages
         if (Array.isArray(this.messages)) {
           this.internalMessages = [...this.messages]
@@ -300,7 +302,7 @@ export default {
         const el = this.$el.querySelector('.messages-list')
         el.scrollTop = el.scrollHeight
       })
-    }
+    },
   },
 
   mounted() {
@@ -311,21 +313,22 @@ export default {
     })
 
     if (this.socketQuery && this.socketQuery.neuroChat) {
-    this.socket.on('neuro-chat:message-created', (msg) => {
-      if (msg && msg.id) {
-        const exists = this.internalMessages.some(m => m.id === msg.id)
-        if (!exists) {
-          msg.sender = {
-            ...msg.sender,
-            name: 'Нейрочат',
-            avatar: this.iconPath
+      this.socket.on('neuro-chat:message-created', (msg) => {
+        console.log('Got AI message', msg)
+        if (msg && msg.id) {
+          const exists = this.internalMessages.some(m => m.id === msg.id)
+          if (!exists) {
+            msg.sender = {
+              ...msg.sender,
+              name: 'Нейрочат',
+              avatar: this.iconPath
+            }
+            this.internalMessages.push(msg)
+            this.scrollToBottom()
           }
-          this.internalMessages.push(msg)
-          this.scrollToBottom()
         }
-      }
-    })
-  }
+      })
+    }
 
     this.socket.on('connect', () => {
       console.log('Socket connected, sid =', this.socket.id)

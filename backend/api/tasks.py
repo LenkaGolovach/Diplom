@@ -5,6 +5,8 @@ from django.contrib.auth import get_user_model
 from .serializers import MessageSerializer
 import socketio
 import logging
+import time
+import eventlet
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -45,8 +47,9 @@ def generate_ai_response(user_message_id):
         if not sio.connected:
             sio.connect('http://127.0.0.1:8000')  # подключаемся к серверу 
         sio.emit('neuro-chat:message-created', payload, namespace='/')  # отправляем событие 
+        print(f"[Celery] ✅ Successfully emitted message {ai_msg.id}") 
         # даём time-slice eventlet, чтобы пакет точно ушёл, иначе emit может быть отброшен 
-        import eventlet
+        time.sleep(0.1)
         eventlet.sleep(0)
     finally:
         if sio.connected:
