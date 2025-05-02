@@ -69,6 +69,7 @@ cd frontend
 
 ```bash
 npm install
+npm install xlsx
 ```
 
 ### Запустите сервер разработки:
