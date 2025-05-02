@@ -1,14 +1,18 @@
 <!-- src/views/NeuroChat.vue -->
 <template>
-  <DiscussionChat
-    :fetch-messages="fetchMessages"
-    :send-message="sendMessage"
-    :messages="messages"
-    :current-user="currentUser"
-    :socket-query="{ neuroChat: true }"
-    :icon-path="aiAvatar"
-    :ai-thinking="aiThinking"
-  />
+  <div class="page-wrapper">
+    <div class="inner-container">
+      <DiscussionChat class="discussion-chat"
+        :fetch-messages="fetchMessages"
+        :send-message="sendMessage"
+        :messages="messages"
+        :current-user="currentUser"
+        :socket-query="{ neuroChat: true }"
+        :icon-path="aiAvatar"
+        :ai-thinking="aiThinking"
+      />
+    </div>
+  </div>
 </template>
 
 <script>
@@ -96,3 +100,20 @@ export default {
   }
 }
 </script>
+
+<style>
+.page-wrapper {
+  display: flex;
+  justify-content: center;
+  height: 100vh;
+}
+.inner-container {
+  width: 100%;
+  max-width: 1200px;  /* whatever limit you like */
+  display: flex;
+  flex-direction: column;
+}
+.discussion-chat {
+  flex: 1;            /* fill remaining vertical space */
+}
+</style>
