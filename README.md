@@ -2,12 +2,22 @@
 
 Этот проект представляет собой веб-приложение для управления задачами с использованием досок Канбан. Проект использует Django для бэкенда и Vue.js для фронтенда.
 
+## Предварительный этап
+
+1. Установите [PostgreSQL](https://www.postgresql.org/download/), если он ещё не установлен.
+2. Установите [ollama](https://ollama.com/download).
+3. Установите [RabbitMQ](https://www.rabbitmq.com/docs/download).
+4. Установите необходимую модель нейросети и запустите ollama
+```bash
+ollama pull mistral
+ollama serve
+```
+
 ## Запуск бэкенда (Django)
 
 ### Настройка базы данных
 
-1. Установите PostgreSQL, если он ещё не установлен.
-2. Создайте базу данных:
+Создайте базу данных:
 ```bash
 sudo -u postgres psql
 CREATE DATABASE mydatabase;
@@ -45,20 +55,20 @@ python manage.py makemigrations api
 python manage.py migrate
 ```
 
-### Запустите celery:
-
-```bash
-celery -A core.celery worker -l info -P eventlet
-python run_socketio.py
-ollama serve
-```
-
 ### Запустите сервер разработки:
 
 Запустите сервер Django:
 
 ```bash
-python manage.py runserver
+python run_socketio.py
+```
+
+### Запустите celery:
+
+В отдельном терминале перейдите в директорию бэкенда, активируйте виртуальное окружение, а затем запустите celery:
+
+```bash
+celery -A core.celery worker -l info -P eventlet
 ```
 
 Сервер будет доступен по адресу http://localhost:8000.
