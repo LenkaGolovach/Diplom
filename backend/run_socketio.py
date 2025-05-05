@@ -2,7 +2,7 @@
 
 # 1) Монки-патчим перед любого рода асинхронщиной
 import eventlet
-eventlet.monkey_patch()  # нужно для eventlet + KombuManager :contentReference[oaicite:0]{index=0}
+eventlet.monkey_patch(os=False) # нужно для eventlet + KombuManager :contentReference[oaicite:0]{index=0}
 
 import os, sys
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))

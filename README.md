@@ -9,7 +9,7 @@
 3. Установите [RabbitMQ](https://www.rabbitmq.com/docs/download).
 4. Установите необходимую модель нейросети и запустите ollama
 ```bash
-ollama pull mistral
+ollama pull llava:7b
 ollama serve
 ```
 

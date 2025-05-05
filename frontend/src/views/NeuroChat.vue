@@ -68,7 +68,7 @@ export default {
               Authorization: `Bearer ${localStorage.getItem('token')}` // Исправлено
             }
           })
-          socket.emit('neuro-chat:message-created', data)
+          // socket.emit('neuro-chat:message-created', data)
           return data
         }
       } catch (err) {
