@@ -185,14 +185,40 @@ class TaskViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
         
+        # Log incoming data for debugging
+        logger.debug(f"UPDATE TASK REQUEST DATA: {request.data}")
+        
         # Handle deleted files
-        deleted_files = request.data.get('deleted_files', [])
+        deleted_files = request.data.get('deleted_files')
+        logger.debug(f"DELETED FILES DATA: {deleted_files}, TYPE: {type(deleted_files)}")
+        
         if deleted_files:
             try:
-                deleted_file_ids = [int(id) for id in deleted_files]
-                FileAttachment.objects.filter(id__in=deleted_file_ids, task=instance).delete()
-            except ValueError as e:
-                logger.error(f"Error parsing deleted_files: {e}")
+                # Если передана строка JSON
+                if isinstance(deleted_files, str):
+                    deleted_file_ids = json.loads(deleted_files)
+                # Если уже список - используем как есть
+                elif isinstance(deleted_files, list):
+                    deleted_file_ids = deleted_files
+                # Если число - создаем список с одним элементом
+                elif isinstance(deleted_files, int):
+                    deleted_file_ids = [deleted_files]
+                else:
+                    deleted_file_ids = []
+                    
+                # Удаляем файлы
+                if deleted_file_ids:
+                    for file_id in deleted_file_ids:
+                        try:
+                            attachment = FileAttachment.objects.get(id=file_id, task=instance)
+                            attachment.delete()
+                        except (FileAttachment.DoesNotExist, ValueError) as e:
+                            logger.error(f"Error deleting file {file_id}: {str(e)}")
+                
+            except json.JSONDecodeError as e:
+                logger.error(f"Error parsing deleted_files JSON: {str(e)}")
+            except Exception as e:
+                logger.error(f"Error handling deleted_files: {str(e)}")
         
         return super().update(request, *args, **kwargs)
 

@@ -41,9 +41,27 @@
       </template>
     </draggable>
 
-    <button class="add-task-button" @click="addTask">
+    <button 
+      v-if="!showTaskForm" 
+      class="add-task-button" 
+      @click="showTaskForm = true"
+    >
       + Добавить задачу
     </button>
+    
+    <div v-if="showTaskForm" class="new-task-form">
+      <input 
+        ref="newTaskInput"
+        v-model="newTaskName"
+        class="new-task-input"
+        placeholder="Введите название задачи"
+        @keyup.enter="createTask"
+      />
+      <div class="new-task-actions">
+        <button @click="createTask" class="save-task-button">Сохранить</button>
+        <button @click="cancelTaskCreation" class="cancel-task-button">Отмена</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -67,6 +85,8 @@ export default {
     return {
       tasks: this.column.tasks,
       isEditing: false,
+      showTaskForm: false,
+      newTaskName: '',
     };
   },
   methods: {
@@ -161,6 +181,32 @@ export default {
         }
       }
     },
+    createTask() {
+      if (!this.newTaskName.trim()) {
+        // Если имя пустое, сфокусируемся на поле ввода
+        this.$nextTick(() => {
+          this.$refs.newTaskInput.focus();
+        });
+        return;
+      }
+      
+      this.$emit('add-task', this.newTaskName.trim());
+      this.newTaskName = '';
+      this.showTaskForm = false;
+    },
+    cancelTaskCreation() {
+      this.newTaskName = '';
+      this.showTaskForm = false;
+    },
+  },
+  watch: {
+    showTaskForm(newVal) {
+      if (newVal) {
+        this.$nextTick(() => {
+          this.$refs.newTaskInput.focus();
+        });
+      }
+    }
   },
 };
 </script>
@@ -302,5 +348,76 @@ export default {
   background: rgba(91, 156, 255, 0.15);
   transform: translateY(-2px);
   box-shadow: 0 2px 5px rgba(91, 156, 255, 0.1);
+}
+
+.new-task-form {
+  margin-top: 12px;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+  width: 90%;
+  max-width: 250px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.new-task-input {
+  width: 100%;
+  padding: 10px 1px;
+  border: 1px solid #bdc3c7;
+  border-radius: 8px;
+  outline: none;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.new-task-input:focus {
+  border-color: #5a9bd4;
+  box-shadow: 0 0 0 2px rgba(90, 155, 212, 0.2);
+}
+
+.new-task-actions {
+  margin-top: 10px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.save-task-button {
+  background: rgba(91, 156, 255, 0.08);
+  border: none;
+  color: #5b9cff;
+  cursor: pointer;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  transition: all 0.3s ease;
+}
+
+.save-task-button:hover {
+  background: rgba(91, 156, 255, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 2px 5px rgba(91, 156, 255, 0.1);
+}
+
+.cancel-task-button {
+  background: none;
+  border: none;
+  color: #95a5a6;
+  cursor: pointer;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  transition: all 0.3s ease;
+}
+
+.cancel-task-button:hover {
+  background: rgba(231, 76, 60, 0.1);
+  color: #e74c3c;
 }
 </style>

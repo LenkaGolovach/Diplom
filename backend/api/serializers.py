@@ -52,8 +52,7 @@ class TaskMemberSerializer(serializers.ModelSerializer):
 class TaskSerializer(serializers.ModelSerializer):
     subtasks = SubTaskSerializer(many=True, required=False)
     attachments = FileAttachmentSerializer(many=True, read_only=True)
-    deleted_files = serializers.ListField(
-        child=serializers.IntegerField(),
+    deleted_files = serializers.JSONField(
         required=False,
         write_only=True
     )
@@ -113,61 +112,99 @@ class TaskSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         deleted_files = validated_data.pop('deleted_files', [])
         if deleted_files:
-            FileAttachment.objects.filter(id__in=deleted_files, task=instance).delete()
+            try:
+                # Обработка удаленных файлов
+                if isinstance(deleted_files, str):
+                    import json
+                    deleted_file_ids = json.loads(deleted_files)
+                else:
+                    deleted_file_ids = deleted_files
+                    
+                # Удаляем файлы
+                if isinstance(deleted_file_ids, list):
+                    logger.debug(f"Удаление файлов: {deleted_file_ids}")
+                    FileAttachment.objects.filter(id__in=deleted_file_ids, task=instance).delete()
+            except Exception as e:
+                logger.error(f"Ошибка при удалении файлов: {str(e)}")
 
         # Обрабатываем JSON-строку подзадач
-        if request and 'subtasks' in request.data:
-            if isinstance(request.data['subtasks'], str):
-                try:
+        try:
+            if request and 'subtasks' in request.data:
+                if isinstance(request.data['subtasks'], str):
                     import json
                     subtasks_data = json.loads(request.data['subtasks'])
-                except json.JSONDecodeError:
-                    import logging
-                    logger = logging.getLogger(__name__)
-                    logger.error(f"Failed to parse subtasks JSON: {request.data['subtasks']}")
+                    logger.debug(f"Получены подзадачи: {subtasks_data}")
+                else:
+                    logger.debug(f"Подзадачи не в виде строки: {request.data['subtasks']}")
+        except json.JSONDecodeError as e:
+            logger.error(f"Ошибка при разборе JSON подзадач: {e}")
+            subtasks_data = []
+        except Exception as e:
+            logger.error(f"Неожиданная ошибка при обработке подзадач: {str(e)}")
+            subtasks_data = []
         
         # Обновляем основные данные задачи
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
         
-        # Обрабатываем подзадачи
-        existing_subtasks = {s.id: s for s in instance.subtasks.all()}
-        
-        subtasks_to_keep = []
-        
-        # Обновление/создание подзадач
-        for subtask_data in subtasks_data:
-            subtask_id = subtask_data.get('id')
-            if subtask_id and subtask_id in existing_subtasks:
-                # Обновляем существующую подзадачу
-                subtask = existing_subtasks[subtask_id]
-                subtask.name = subtask_data.get('name', subtask.name)
-                subtask.completed = subtask_data.get('completed', subtask.completed)
-                subtask.save()
-                subtasks_to_keep.append(subtask.id)
-            else:
-                # Создаем новую подзадачу
-                new_subtask = SubTask.objects.create(
-                    task=instance,
-                    name=subtask_data.get('name', ''),
-                    completed=subtask_data.get('completed', False)
-                )
-                subtasks_to_keep.append(new_subtask.id)
-        
-        # Удаляем подзадачи, которые не в списке сохраняемых
-        for subtask_id, subtask in existing_subtasks.items():
-            if subtask_id not in subtasks_to_keep:
-                subtask.delete()
+        try:
+            # Обрабатываем подзадачи
+            existing_subtasks = {s.id: s for s in instance.subtasks.all()}
+            logger.debug(f"Существующие подзадачи: {list(existing_subtasks.keys())}")
+            
+            subtasks_to_keep = []
+            
+            # Обновление/создание подзадач
+            for subtask_data in subtasks_data:
+                try:
+                    subtask_id = subtask_data.get('id')
+                    # Проверка на валидность id
+                    if subtask_id and not isinstance(subtask_id, int):
+                        try:
+                            subtask_id = int(subtask_id)
+                        except (ValueError, TypeError):
+                            subtask_id = None
+                            
+                    if subtask_id and subtask_id in existing_subtasks:
+                        # Обновляем существующую подзадачу
+                        subtask = existing_subtasks[subtask_id]
+                        subtask.name = subtask_data.get('name', subtask.name)
+                        subtask.completed = subtask_data.get('completed', subtask.completed)
+                        subtask.save()
+                        subtasks_to_keep.append(subtask.id)
+                    else:
+                        # Создаем новую подзадачу
+                        name = subtask_data.get('name', '').strip()
+                        if name:  # Пропускаем пустые подзадачи
+                            new_subtask = SubTask.objects.create(
+                                task=instance,
+                                name=name,
+                                completed=bool(subtask_data.get('completed', False))
+                            )
+                            subtasks_to_keep.append(new_subtask.id)
+                except Exception as e:
+                    logger.error(f"Ошибка при обработке подзадачи {subtask_data}: {str(e)}")
+            
+            # Удаляем подзадачи, которые не в списке сохраняемых
+            for subtask_id, subtask in existing_subtasks.items():
+                if subtask_id not in subtasks_to_keep:
+                    subtask.delete()
+            
+        except Exception as e:
+            logger.error(f"Ошибка при обновлении подзадач: {str(e)}")
         
         # Обрабатываем файлы вложений
-        files = request.FILES.getlist('attachments') if request else []
-        for file in files:
-            FileAttachment.objects.create(
-                task=instance,
-                file=file,
-                name=file.name
-            )
+        try:
+            files = request.FILES.getlist('attachments') if request else []
+            for file in files:
+                FileAttachment.objects.create(
+                    task=instance,
+                    file=file,
+                    name=file.name
+                )
+        except Exception as e:
+            logger.error(f"Ошибка при добавлении файлов: {str(e)}")
     
         return instance
 

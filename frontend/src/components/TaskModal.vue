@@ -58,9 +58,17 @@
             </div>
 
             <!-- Подзадачи -->
-            <button @click="addSubtask" class="add-subtask-button">
-              + Добавить подзадачу
-            </button>
+            <div class="subtask-add-form">
+              <input 
+                v-model="newSubtaskName" 
+                placeholder="Введите название подзадачи" 
+                class="subtask-name-input"
+                @keyup.enter="addSubtaskWithName"
+              />
+              <button @click="addSubtaskWithName" class="add-subtask-button">
+                + Добавить подзадачу
+              </button>
+            </div>
 
             <div class="subtasks">
               <div v-for="(subtask, index) in localTask.subtasks" :key="index" class="subtask">
@@ -156,218 +164,326 @@
           <!-- Вкладка "GitHub" -->
           <div v-if="activeTab === 'github'" class="tab-pane">
             <div class="github-section">
-              <label>GitHub интеграция:</label>
-              <div class="github-controls">
-                <select v-model="selectedGitHubAction" class="github-action-select">
+              <div class="github-header">
+                <div class="github-logo">
+                  <img src="/icons/github-icon.png" alt="GitHub" class="github-logo-img">
+                  <h3>GitHub интеграция</h3>
+                </div>
+                <p class="github-description">Привяжите GitHub репозиторий к задаче, чтобы отслеживать коммиты, просматривать Pull Requests и получать информацию о репозитории.</p>
+              </div>
+
+              <div class="github-action-wrapper">
+                <label for="github-action">Выберите действие:</label>
+                <select 
+                  id="github-action" 
+                  v-model="selectedGitHubAction" 
+                  class="github-action-select"
+                >
                   <option value="">Выберите действие</option>
                   <option value="track-commits">Отслеживать коммиты</option>
                   <option value="repo-info">Информация о репозитории</option>
                   <option value="view-prs">Просмотр Pull Requests</option>
                 </select>
+              </div>
 
-                <!-- Выбор репозитория -->
-                <div v-if="selectedGitHubAction && !linkedRepo" class="github-content">
-                  <div class="repo-selection">
-                    <h4>Выберите репозиторий</h4>
-                    
-                    <!-- Вкладки -->
-                    <div class="repo-tabs">
-                      <button 
-                        :class="['tab-btn', { active: activeTab === 'search' }]"
-                        @click="activeTab = 'search'"
-                      >
-                        Поиск
-                      </button>
-                      <button 
-                        :class="['tab-btn', { active: activeTab === 'recent' }]"
-                        @click="activeTab = 'recent'"
-                      >
-                        Недавние
-                      </button>
-                      <button 
-                        :class="['tab-btn', { active: activeTab === 'link' }]"
-                        @click="activeTab = 'link'"
-                      >
-                        Ссылка
-                      </button>
-                    </div>
+              <!-- Выбор репозитория -->
+              <div v-if="selectedGitHubAction && !linkedRepo" class="github-content-wrapper">
+                <div class="repo-selection-container">
+                  <h4 class="repo-selection-title">Выберите репозиторий</h4>
+                  
+                  <!-- Вкладки -->
+                  <div class="repo-tabs">
+                    <button 
+                     :class="['tab-btn', { active: githubActiveTab === 'search' }]"
+                     @click="githubActiveTab = 'search'"
+                    >
+                      <i class="fas fa-search"></i> Поиск
+                    </button>
+                    <button 
+                     :class="['tab-btn', { active: githubActiveTab === 'recent' }]"
+                     @click="githubActiveTab = 'recent'"
+                    >
+                      <i class="fas fa-history"></i> Недавние
+                    </button>
+                    <button 
+                     :class="['tab-btn', { active: githubActiveTab === 'link' }]"
+                     @click="githubActiveTab = 'link'"
+                    >
+                      <i class="fas fa-link"></i> Ссылка
+                    </button>
+                  </div>
 
-                    <!-- Поиск репозиториев -->
-                    <div v-if="activeTab === 'search'" class="tab-content">
-                      <div class="search-container">
+                  <!-- Поиск репозиториев -->
+                  <div v-if="githubActiveTab === 'search'" class="repo-tab-content">
+                    <div class="search-container">
+                      <div class="search-input-wrapper">
+                        <i class="fas fa-search search-icon"></i>
                         <input 
                           v-model="githubSearchQuery" 
                           @input="searchGitHubRepos" 
                           placeholder="Поиск репозиториев..."
                           class="github-search-input"
+                          autocomplete="off"
                         >
-                        <div v-if="searchResults.length" class="search-results">
-                          <div 
-                            v-for="repo in searchResults" 
-                            :key="repo.id" 
-                            class="repo-item"
-                            @click="selectRepo(repo)"
-                          >
-                            <div class="repo-name">{{ repo.name }}</div>
-                            <div class="repo-description">{{ repo.description }}</div>
-                          </div>
-                        </div>
                       </div>
-                    </div>
-
-                    <!-- Недавние репозитории -->
-                    <div v-if="activeTab === 'recent'" class="tab-content">
-                      <div v-if="recentRepos.length" class="recent-repos">
+                      <div v-if="isSearching" class="search-loader">
+                        <div class="loader"></div>
+                      </div>
+                      <div v-else-if="searchResults.length" class="search-results">
                         <div 
-                          v-for="repo in recentRepos" 
+                          v-for="repo in searchResults" 
                           :key="repo.id" 
                           class="repo-item"
                           @click="selectRepo(repo)"
                         >
-                          <div class="repo-name">{{ repo.name }}</div>
-                          <div class="repo-description">{{ repo.description }}</div>
+                          <div class="repo-item-header">
+                            <i class="fas fa-book-open repo-icon"></i>
+                            <div class="repo-name">{{ repo.name }}</div>
+                          </div>
+                          <div class="repo-description">{{ repo.description || 'Нет описания' }}</div>
                         </div>
                       </div>
-                      <div v-else class="no-repos-message">
-                        Нет недавно использованных репозиториев
+                      <div v-else-if="githubSearchQuery && !searchResults.length" class="no-results">
+                        <i class="fas fa-search-minus"></i>
+                        <p>Репозитории не найдены. Попробуйте другой запрос.</p>
                       </div>
                     </div>
+                  </div>
 
-                    <!-- Ввод ссылки -->
-                    <div v-if="activeTab === 'link'" class="tab-content">
-                      <div class="link-repo-container">
+                  <!-- Недавние репозитории -->
+                  <div v-if="githubActiveTab === 'recent'" class="repo-tab-content">
+                    <div v-if="recentRepos.length" class="recent-repos">
+                      <div 
+                        v-for="repo in recentRepos" 
+                        :key="repo.id" 
+                        class="repo-item"
+                        @click="selectRepo(repo)"
+                      >
+                        <div class="repo-item-header">
+                          <i class="fas fa-history repo-icon"></i>
+                          <div class="repo-name">{{ repo.name }}</div>
+                        </div>
+                        <div class="repo-description">{{ repo.description || 'Нет описания' }}</div>
+                      </div>
+                    </div>
+                    <div v-else class="no-repos-message">
+                      <i class="fas fa-exclamation-circle"></i>
+                      <p>Нет недавно использованных репозиториев</p>
+                    </div>
+                  </div>
+
+                  <!-- Ввод ссылки -->
+                  <div v-if="githubActiveTab === 'link'" class="repo-tab-content">
+                    <div class="link-repo-container">
+                      <div class="link-input-wrapper">
+                        <i class="fas fa-link link-icon"></i>
                         <input 
                           v-model="repoUrl" 
                           placeholder="https://github.com/user/repo" 
                           class="repo-url-input"
+                          autocomplete="off"
                         >
-                        <button @click="linkRepository" class="link-repo-btn">
-                          Привязать
-                        </button>
+                      </div>
+                      <p class="link-help-text">
+                        Введите полный URL GitHub репозитория или формат username/repository
+                      </p>
+                      <button @click="linkRepository" class="link-repo-btn" :disabled="!repoUrl.trim()">
+                        <i class="fas fa-plus"></i> Привязать репозиторий
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Содержимое в зависимости от выбранного действия -->
+              <div v-else-if="selectedGitHubAction && linkedRepo" class="github-content-wrapper">
+                <!-- Отслеживание коммитов -->
+                <div v-if="selectedGitHubAction === 'track-commits'" class="action-content">
+                  <div class="repo-header">
+                    <div class="repo-info">
+                      <i class="fas fa-book repo-icon"></i>
+                      <div class="repo-name-container">
+                        <span class="repo-owner">{{ linkedRepo.full_name.split('/')[0] }}</span>
+                        <span class="repo-name-divider">/</span>
+                        <span class="repo-name">{{ linkedRepo.name }}</span>
+                      </div>
+                    </div>
+                    <div class="repo-actions">
+                      <button @click="changeRepo" class="change-repo-btn">
+                        <i class="fas fa-exchange-alt"></i> Сменить
+                      </button>
+                      <a 
+                        :href="linkedRepo.html_url" 
+                        target="_blank" 
+                        class="view-repo-btn"
+                      >
+                        <i class="fas fa-external-link-alt"></i> Открыть
+                      </a>
+                      <button @click="refreshCommits" class="refresh-btn">
+                        <i class="fas fa-sync-alt"></i> Обновить
+                      </button>
+                    </div>
+                  </div>
+                  <div class="commits-list">
+                    <div v-if="commits && commits.length > 0">
+                      <div 
+                        v-for="commit in commits" 
+                        :key="commit.sha" 
+                        class="commit-item"
+                        :class="{ 'error-commit': commit.sha.startsWith('error') }"
+                      >
+                        <div class="commit-header">
+                          <img :src="commit.author.avatar_url" class="author-avatar">
+                          <span class="author-name">{{ commit.author.name }}</span>
+                          <a 
+                            v-if="!commit.sha.startsWith('error')" 
+                            :href="commit.html_url" 
+                            target="_blank" 
+                            class="commit-link"
+                          >
+                            <i class="fas fa-external-link-alt"></i>
+                          </a>
+                        </div>
+                        <div class="commit-message">{{ commit.message }}</div>
+                        <div class="commit-date">{{ commit.author.date }}</div>
+                      </div>
+                    </div>
+                    <div v-else class="empty-commits">
+                      <i class="fas fa-code-branch empty-icon"></i>
+                      <p>Коммиты не найдены. Попробуйте обновить.</p>
+                      <div v-if="commitsDebug" class="debug-info">
+                        <pre>{{ JSON.stringify(commitsDebug, null, 2) }}</pre>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <!-- Содержимое в зависимости от выбранного действия -->
-                <div v-else-if="selectedGitHubAction && linkedRepo" class="github-content">
-                  <!-- Отслеживание коммитов -->
-                  <div v-if="selectedGitHubAction === 'track-commits'" class="action-content">
-                    <div class="repo-header">
-                      <div class="repo-info">
+                <!-- Pull Requests -->
+                <div v-if="selectedGitHubAction === 'view-prs'" class="action-content">
+                  <div class="repo-header">
+                    <div class="repo-info">
+                      <i class="fas fa-book repo-icon"></i>
+                      <div class="repo-name-container">
+                        <span class="repo-owner">{{ linkedRepo.full_name.split('/')[0] }}</span>
+                        <span class="repo-name-divider">/</span>
                         <span class="repo-name">{{ linkedRepo.name }}</span>
-                        <button @click="changeRepo" class="change-repo-btn">
-                          Сменить репозиторий
-                        </button>
                       </div>
-                      <button @click="refreshCommits" class="refresh-btn">
-                        🔄 Обновить
+                    </div>
+                    <div class="repo-actions">
+                      <button @click="changeRepo" class="change-repo-btn">
+                        <i class="fas fa-exchange-alt"></i> Сменить
                       </button>
-                    </div>
-                    <div class="commits-list">
-                      <div v-if="commits && commits.length > 0">
-                        <div 
-                          v-for="commit in commits" 
-                          :key="commit.sha" 
-                          class="commit-item"
-                          :class="{ 'error-commit': commit.sha.startsWith('error') }"
-                        >
-                          <div class="commit-header">
-                            <img :src="commit.author.avatar_url" class="author-avatar">
-                            <span class="author-name">{{ commit.author.name }}</span>
-                            <a 
-                              v-if="!commit.sha.startsWith('error')" 
-                              :href="commit.html_url" 
-                              target="_blank" 
-                              class="commit-link"
-                            >
-                              <i class="external-icon">↗</i>
-                            </a>
-                          </div>
-                          <div class="commit-message">{{ commit.message }}</div>
-                          <div class="commit-date">{{ commit.author.date }}</div>
-                        </div>
-                      </div>
-                      <div v-else class="empty-commits">
-                        <p>Коммиты не найдены. Попробуйте обновить.</p>
-                        <div v-if="commitsDebug" class="debug-info">
-                          <pre>{{ JSON.stringify(commitsDebug, null, 2) }}</pre>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Pull Requests -->
-                  <div v-if="selectedGitHubAction === 'view-prs'" class="action-content">
-                    <div class="repo-header">
-                      <div class="repo-info">
-                        <span class="repo-name">{{ linkedRepo.name }}</span>
-                        <button @click="changeRepo" class="change-repo-btn">
-                          Сменить репозиторий
-                        </button>
-                      </div>
-                      <button @click="refreshPRs" class="refresh-btn">
-                        🔄 Обновить
-                      </button>
-                    </div>
-                    <div class="prs-list">
-                      <div 
-                        v-for="pr in pullRequests" 
-                        :key="pr.id" 
-                        class="pr-item"
+                      <a 
+                        :href="linkedRepo.html_url" 
+                        target="_blank" 
+                        class="view-repo-btn"
                       >
-                        <div class="pr-title">{{ pr.title }}</div>
-                        <div class="pr-info">
-                          <span class="pr-author">{{ pr.user.login }}</span>
-                          <span class="pr-status" :class="pr.state">{{ pr.state }}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Информация о репозитории (новая секция) -->
-                  <div v-if="selectedGitHubAction === 'repo-info'" class="action-content">
-                    <div class="repo-header">
-                      <div class="repo-info">
-                        <span class="repo-name">{{ linkedRepo.name }}</span>
-                        <button @click="changeRepo" class="change-repo-btn">
-                          Сменить репозиторий
-                        </button>
-                      </div>
-                      <button @click="refreshRepoInfo" class="refresh-btn">
-                        🔄 Обновить
+                        <i class="fas fa-external-link-alt"></i> Открыть
+                      </a>
+                      <button @click="refreshPRs" class="refresh-btn">
+                        <i class="fas fa-sync-alt"></i> Обновить
                       </button>
                     </div>
-                    <div class="repo-details">
-                      <div class="repo-detail-item">
-                        <div class="detail-label">Владелец:</div>
-                        <div class="detail-value">{{ repoDetails.owner }}</div>
+                  </div>
+                  <div class="prs-list">
+                    <div 
+                      v-for="pr in pullRequests" 
+                      :key="pr.id" 
+                      class="pr-item"
+                    >
+                      <div class="pr-title-row">
+                        <div class="pr-number">#{{ pr.number }}</div>
+                        <div class="pr-title">{{ pr.title }}</div>
+                        <div class="pr-status" :class="pr.state">{{ pr.state }}</div>
                       </div>
-                      <div class="repo-detail-item">
-                        <div class="detail-label">Дата создания:</div>
-                        <div class="detail-value">{{ repoDetails.created_at || 'Н/Д' }}</div>
-                      </div>
-                      <div class="repo-detail-item">
-                        <div class="detail-label">Последнее обновление:</div>
-                        <div class="detail-value">{{ repoDetails.updated_at || 'Н/Д' }}</div>
-                      </div>
-                      <div class="repo-detail-item">
-                        <div class="detail-label">Звёзд:</div>
-                        <div class="detail-value">{{ repoDetails.stars || 0 }}</div>
-                      </div>
-                      <div class="repo-detail-item">
-                        <div class="detail-label">Форков:</div>
-                        <div class="detail-value">{{ repoDetails.forks || 0 }}</div>
-                      </div>
-                      <div class="repo-url-item">
-                        <div class="detail-label">URL:</div>
-                        <a :href="repoDetails.html_url" target="_blank" class="repo-link">
-                          {{ repoDetails.html_url }} <i class="external-icon">↗</i>
+                      <div class="pr-info">
+                        <div class="pr-author">
+                          <img :src="pr.user.avatar_url || '/default-avatar.png'" class="pr-author-avatar">
+                          <span>{{ pr.user.login }}</span>
+                        </div>
+                        <div class="pr-date">{{ pr.created_at ? formatDate(pr.created_at) : '' }}</div>
+                        <a :href="pr.html_url" target="_blank" class="pr-link">
+                          <i class="fas fa-external-link-alt"></i>
                         </a>
                       </div>
                     </div>
+                    <div v-if="!pullRequests || pullRequests.length === 0" class="empty-prs">
+                      <i class="fas fa-code-pull-request empty-icon"></i>
+                      <p>Pull Requests не найдены</p>
+                    </div>
                   </div>
                 </div>
+
+                <!-- Информация о репозитории (новая секция) -->
+                <div v-if="selectedGitHubAction === 'repo-info'" class="action-content">
+                  <div class="repo-header">
+                    <div class="repo-info">
+                      <i class="fas fa-book repo-icon"></i>
+                      <div class="repo-name-container">
+                        <span class="repo-owner">{{ linkedRepo.full_name.split('/')[0] }}</span>
+                        <span class="repo-name-divider">/</span>
+                        <span class="repo-name">{{ linkedRepo.name }}</span>
+                      </div>
+                    </div>
+                    <div class="repo-actions">
+                      <button @click="changeRepo" class="change-repo-btn">
+                        <i class="fas fa-exchange-alt"></i> Сменить
+                      </button>
+                      <a 
+                        :href="linkedRepo.html_url" 
+                        target="_blank" 
+                        class="view-repo-btn"
+                      >
+                        <i class="fas fa-external-link-alt"></i> Открыть
+                      </a>
+                      <button @click="refreshRepoInfo" class="refresh-btn">
+                        <i class="fas fa-sync-alt"></i> Обновить
+                      </button>
+                    </div>
+                  </div>
+                  <div class="repo-details">
+                    <div class="repo-detail-grid">
+                      <div class="repo-detail-item">
+                        <div class="detail-label"><i class="fas fa-user"></i> Владелец:</div>
+                        <div class="detail-value">{{ repoDetails.owner }}</div>
+                      </div>
+                      <div class="repo-detail-item">
+                        <div class="detail-label"><i class="fas fa-calendar-alt"></i> Дата создания:</div>
+                        <div class="detail-value">{{ repoDetails.created_at || 'Н/Д' }}</div>
+                      </div>
+                      <div class="repo-detail-item">
+                        <div class="detail-label"><i class="fas fa-sync"></i> Последнее обновление:</div>
+                        <div class="detail-value">{{ repoDetails.updated_at || 'Н/Д' }}</div>
+                      </div>
+                      <div class="repo-detail-item">
+                        <div class="detail-label"><i class="fas fa-star"></i> Звёзд:</div>
+                        <div class="detail-value">{{ repoDetails.stars || 0 }}</div>
+                      </div>
+                      <div class="repo-detail-item">
+                        <div class="detail-label"><i class="fas fa-code-branch"></i> Форков:</div>
+                        <div class="detail-value">{{ repoDetails.forks || 0 }}</div>
+                      </div>
+                      <div class="repo-detail-item">
+                        <div class="detail-label"><i class="fas fa-code"></i> Язык:</div>
+                        <div class="detail-value">{{ repoDetails.language || 'Не указан' }}</div>
+                      </div>
+                    </div>
+                    <div class="repo-url-item">
+                      <div class="detail-label"><i class="fas fa-link"></i> URL:</div>
+                      <a :href="repoDetails.html_url" target="_blank" class="repo-link">
+                        {{ repoDetails.html_url }} <i class="fas fa-external-link-alt"></i>
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Если ничего не выбрано -->
+              <div v-if="!selectedGitHubAction" class="github-empty-state">
+                <div class="github-empty-icon">
+                  <i class="fas fa-code-branch"></i>
+                </div>
+                <p class="github-empty-text">Выберите действие для работы с GitHub интеграцией</p>
               </div>
             </div>
           </div>
@@ -427,6 +543,9 @@ export default {
       recentRepos: [],
       commitsDebug: null,
       repoDetails: {},
+      newSubtaskName: '',
+      githubActiveTab: 'search',
+      isSearching: false,
     };
   },
   computed: {
@@ -556,7 +675,18 @@ export default {
     async saveTask() {
       try {
         const formData = new FormData();
-        formData.append('name', this.localTask.name);
+        
+        // Если название пустое, создаем автоматическое имя
+        const taskName = this.localTask.name && this.localTask.name.trim() ? 
+                         this.localTask.name.trim() : 
+                         'Задача ' + new Date().toLocaleString('ru-RU', {
+                           day: '2-digit',
+                           month: '2-digit',
+                           hour: '2-digit',
+                           minute: '2-digit'
+                         });
+                         
+        formData.append('name', taskName);
         formData.append('description', this.localTask.description || '');
         
         const columnId = this.localTask.column instanceof Object 
@@ -567,12 +697,31 @@ export default {
         
         // Подзадачи - очищаем поле editing перед отправкой
         if (this.localTask.subtasks && this.localTask.subtasks.length > 0) {
-          const cleanSubtasks = this.localTask.subtasks.map(s => ({
-            id: s.id,
-            name: s.name,
-            completed: s.completed
-          }));
+          // Создаем копию массива для очистки
+          const cleanSubtasks = this.localTask.subtasks.map(s => {
+            // Проверяем, есть ли id у подзадачи
+            if (s.id && isNaN(parseInt(s.id))) {
+              // Временно удаляем id, если он не числовой
+              const { id, ...rest } = s;
+              return {
+                ...rest,
+                name: s.name || '',
+                completed: Boolean(s.completed)
+              };
+            }
+            
+            return {
+              id: s.id,
+              name: s.name || '',
+              completed: Boolean(s.completed)
+            };
+          });
+          
+          console.log('Отправляемые подзадачи:', cleanSubtasks);
           formData.append('subtasks', JSON.stringify(cleanSubtasks));
+        } else {
+          // Если подзадач нет, отправляем пустой массив
+          formData.append('subtasks', JSON.stringify([]));
         }
         
         // Новые файлы
@@ -583,9 +732,7 @@ export default {
         }
 
         if (this.deletedFileIds.length > 0) {
-          this.deletedFileIds.forEach(id => {
-              formData.append('deleted_files', id.toString());
-          });
+          formData.append('deleted_files', JSON.stringify(this.deletedFileIds));
         }
         
         const config = {
@@ -596,23 +743,34 @@ export default {
         };
         
         let response;
-        if (this.localTask.id) {
-          response = await axios.patch(`/api/tasks/${this.localTask.id}/`, formData, config);
-        } else {
-          response = await axios.post('/api/tasks/', formData, config);
+        try {
+          if (this.localTask.id) {
+            response = await axios.patch(`/api/tasks/${this.localTask.id}/`, formData, config);
+          } else {
+            response = await axios.post('/api/tasks/', formData, config);
+          }
+          
+          // Обновляем локальные данные задачи после сохранения
+          this.localTask = response.data;
+          
+          // Проверяем участие пользователя в задаче
+          await this.checkParticipation();
+          
+          this.$emit('saveTask', response.data);
+          this.closeModal();
+          
+        } catch (apiError) {
+          console.error('Ошибка API при сохранении задачи:', apiError);
+          if (apiError.response) {
+            console.error('Ответ сервера:', apiError.response.data);
+            throw new Error(`Ошибка сервера: ${JSON.stringify(apiError.response.data)}`);
+          } else {
+            throw apiError;
+          }
         }
-
-        // Обновляем локальные данные задачи после сохранения
-        this.localTask = response.data;
-
-        // Проверяем участие пользователя в задаче
-        await this.checkParticipation();
-        
-        this.$emit('saveTask', response.data);
-        this.closeModal();
       } catch (error) {
         console.error('Ошибка сохранения задачи:', error);
-        alert(`Ошибка: ${(error.response && error.response.data) || error.message}`);
+        alert(`Ошибка: ${error.message}`);
       }
     },
     removeFile(index) {
@@ -705,10 +863,13 @@ export default {
       }
       
       try {
+        this.isSearching = true;
         this.searchResults = await GitHubService.searchRepositories(this.githubSearchQuery);
       } catch (error) {
         console.error('Ошибка поиска репозиториев:', error);
         this.searchResults = [];
+      } finally {
+        this.isSearching = false;
       }
     },
     async selectRepo(repo) {
@@ -796,7 +957,16 @@ export default {
       }
     },
     formatDate(dateString) {
-      return new Date(dateString).toLocaleString();
+      if (!dateString) return '';
+      
+      const date = new Date(dateString);
+      return date.toLocaleDateString('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
     },
     changeRepo() {
       this.linkedRepo = null;
@@ -815,6 +985,27 @@ export default {
       } catch (error) {
         console.error('Ошибка загрузки информации о репозитории:', error);
       }
+    },
+    addSubtaskWithName() {
+      if (!this.localTask.subtasks) {
+        this.localTask.subtasks = [];
+      }
+      this.localTask.subtasks.push({
+        name: this.newSubtaskName,
+        completed: false,
+        editing: false
+      });
+      
+      // Обновляем высоту контейнера подзадач
+      this.$nextTick(() => {
+        this.adjustSubtasksHeight();
+        
+        // Прокручиваем к последней добавленной подзадаче
+        this.scrollToLastSubtask();
+      });
+      
+      // Сбрасываем значение новой подзадачи
+      this.newSubtaskName = '';
     },
   },
   watch: {
@@ -1153,13 +1344,29 @@ export default {
   font-weight: 500;
 }
 
-.add-subtask-button {
+.subtask-add-form {
+  display: flex;
+  gap: 10px;
+  margin: 10px 0;
   width: 100%;
+}
+
+.subtask-name-input {
+  flex: 1;
   padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  font-size: 14px;
+}
+
+.add-subtask-button {
+  width: auto;
+  flex: 0 0 auto;
+  padding: 10px 15px;
   background: #f0f0f0;
   border: none;
   border-radius: 8px;
-  margin: 10px 0;
   cursor: pointer;
   transition: all 0.3s ease;
   font-size: 14px;
@@ -1950,5 +2157,586 @@ export default {
 .modal-content::-webkit-scrollbar-thumb {
   background-color: rgba(0, 0, 0, 0.1);
   border-radius: 10px;
+}
+
+.input-error {
+  color: #e74c3c;
+  font-size: 14px;
+  margin-top: 5px;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+}
+
+.task-title-input.error {
+  border-color: #e74c3c;
+}
+
+/* Стилизация интеграции с GitHub */
+.github-section {
+  margin: 0;
+  padding: 0;
+}
+
+.github-header {
+  margin-bottom: 20px;
+}
+
+.github-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.github-logo h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #24292e;
+}
+
+.github-logo-img {
+  width: 32px;
+  height: 32px;
+}
+
+.github-description {
+  color: #586069;
+  font-size: 14px;
+  margin: 0 0 15px 0;
+  line-height: 1.5;
+}
+
+.github-action-wrapper {
+  margin-bottom: 20px;
+}
+
+.github-action-wrapper label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  color: #24292e;
+}
+
+.github-action-select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5da;
+  border-radius: 6px;
+  background: white;
+  font-size: 14px;
+  color: #24292e;
+  appearance: none;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="%23586069" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>');
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  transition: border-color 0.2s ease;
+}
+
+.github-action-select:focus {
+  border-color: #2188ff;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(33, 136, 255, 0.2);
+}
+
+.github-content-wrapper {
+  background: #f6f8fa;
+  border: 1px solid #e1e4e8;
+  border-radius: 6px;
+  padding: 16px;
+  margin-top: 15px;
+}
+
+.repo-selection-container {
+  background: white;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.repo-selection-title {
+  margin: 0 0 15px 0;
+  font-size: 16px;
+  color: #24292e;
+  font-weight: 600;
+}
+
+.repo-tabs {
+  display: flex;
+  background: #f6f8fa;
+  border-bottom: 1px solid #e1e4e8;
+  margin-bottom: 15px;
+}
+
+.tab-btn {
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-size: 14px;
+  color: #586069;
+  transition: all 0.2s ease;
+  flex: 1;
+  text-align: center;
+}
+
+.tab-btn.active {
+  color: #2188ff;
+  border-bottom-color: #2188ff;
+  background: white;
+  font-weight: 600;
+}
+
+.tab-btn:hover:not(.active) {
+  color: #24292e;
+  background: rgba(27, 31, 35, 0.05);
+}
+
+.repo-tab-content {
+  padding: 0 15px 15px;
+}
+
+.search-input-wrapper, .link-input-wrapper {
+  position: relative;
+  margin-bottom: 15px;
+}
+
+.search-icon, .link-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6a737d;
+}
+
+.github-search-input, .repo-url-input {
+  width: 100%;
+  padding: 10px 12px 10px 36px;
+  border: 1px solid #d1d5da;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #24292e;
+  background: white;
+  transition: all 0.2s ease;
+}
+
+.github-search-input:focus, .repo-url-input:focus {
+  border-color: #2188ff;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(33, 136, 255, 0.2);
+}
+
+.search-loader {
+  display: flex;
+  justify-content: center;
+  margin: 20px 0;
+}
+
+.loader {
+  width: 24px;
+  height: 24px;
+  border: 3px solid #e1e4e8;
+  border-radius: 50%;
+  border-top-color: #2188ff;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.search-results, .recent-repos {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #e1e4e8;
+  border-radius: 6px;
+}
+
+.repo-item {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e1e4e8;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.repo-item:last-child {
+  border-bottom: none;
+}
+
+.repo-item:hover {
+  background-color: #f6f8fa;
+}
+
+.repo-item-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 5px;
+}
+
+.repo-icon {
+  color: #586069;
+  width: 16px;
+}
+
+.repo-name {
+  font-weight: 600;
+  color: #0366d6;
+  font-size: 14px;
+}
+
+.repo-description {
+  color: #586069;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.no-results, .no-repos-message {
+  padding: 30px 20px;
+  text-align: center;
+  color: #586069;
+}
+
+.no-results i, .no-repos-message i {
+  font-size: 24px;
+  margin-bottom: 10px;
+  color: #d1d5da;
+  display: block;
+}
+
+.link-help-text {
+  font-size: 13px;
+  color: #586069;
+  margin: 10px 0 15px;
+}
+
+.link-repo-btn {
+  width: 100%;
+  padding: 10px 16px;
+  background: #2ea44f;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.link-repo-btn:hover:not(:disabled) {
+  background: #2c974b;
+}
+
+.link-repo-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.repo-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.repo-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.repo-name-container {
+  display: flex;
+  align-items: center;
+}
+
+.repo-owner {
+  color: #586069;
+  font-size: 14px;
+}
+
+.repo-name-divider {
+  color: #586069;
+  margin: 0 4px;
+}
+
+.repo-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.change-repo-btn, .refresh-btn {
+  padding: 6px 12px;
+  background: #f6f8fa;
+  border: 1px solid #d1d5da;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #24292e;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.change-repo-btn:hover, .refresh-btn:hover {
+  background: #e1e4e8;
+}
+
+.view-repo-btn {
+  padding: 6px 12px;
+  background: #0366d6;
+  border: 1px solid #0366d6;
+  border-radius: 6px;
+  font-size: 13px;
+  color: white;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.view-repo-btn:hover {
+  background: #0058c7;
+}
+
+.action-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.action-header h4 {
+  margin: 0;
+  font-size: 16px;
+  color: #24292e;
+}
+
+.commits-list, .prs-list {
+  background: white;
+  border: 1px solid #e1e4e8;
+  border-radius: 6px;
+  overflow: hidden;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.commit-item {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e1e4e8;
+}
+
+.commit-item:last-child {
+  border-bottom: none;
+}
+
+.commit-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.author-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.author-name {
+  font-weight: 600;
+  color: #24292e;
+  font-size: 14px;
+  margin-right: auto;
+}
+
+.commit-link {
+  color: #0366d6;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.commit-message {
+  color: #24292e;
+  font-size: 14px;
+  margin-bottom: 8px;
+  word-break: break-word;
+}
+
+.commit-date {
+  color: #586069;
+  font-size: 12px;
+}
+
+.empty-commits, .empty-prs {
+  padding: 40px 20px;
+  text-align: center;
+  color: #586069;
+}
+
+.empty-icon {
+  font-size: 24px;
+  margin-bottom: 10px;
+  color: #d1d5da;
+  display: block;
+}
+
+.repo-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.repo-detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detail-label {
+  color: #586069;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.detail-value {
+  color: #24292e;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.repo-url-item {
+  padding-top: 15px;
+  border-top: 1px solid #e1e4e8;
+}
+
+.repo-link {
+  color: #0366d6;
+  text-decoration: none;
+  font-size: 14px;
+  word-break: break-all;
+}
+
+.pr-item {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e1e4e8;
+}
+
+.pr-item:last-child {
+  border-bottom: none;
+}
+
+.pr-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.pr-number {
+  color: #586069;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.pr-title {
+  font-weight: 600;
+  color: #24292e;
+  font-size: 14px;
+  flex: 1;
+  word-break: break-word;
+}
+
+.pr-info {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.pr-author {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #586069;
+}
+
+.pr-author-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+}
+
+.pr-date {
+  font-size: 13px;
+  color: #586069;
+}
+
+.pr-link {
+  margin-left: auto;
+  color: #0366d6;
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.pr-status {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.pr-status.open {
+  background: rgba(46, 164, 79, 0.15);
+  color: #22863a;
+}
+
+.pr-status.closed {
+  background: rgba(215, 58, 73, 0.15);
+  color: #cb2431;
+}
+
+.github-empty-state {
+  text-align: center;
+  padding: 40px 0;
+}
+
+.github-empty-icon {
+  font-size: 36px;
+  color: #d1d5da;
+  margin-bottom: 15px;
+}
+
+.github-empty-text {
+  color: #586069;
+  font-size: 16px;
+}
+
+/* Дополнительная анимация для hover на пунктах */
+.repo-item, .pr-item, .commit-item {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.repo-item:hover, .pr-item:hover, .commit-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  z-index: 1;
+  position: relative;
+}
+
+/* Error commit styling */
+.error-commit {
+  background-color: rgba(215, 58, 73, 0.05);
+  border-left: 3px solid #cb2431;
 }
 </style>

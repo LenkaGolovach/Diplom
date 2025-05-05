@@ -34,10 +34,10 @@
           v-for="(column, index) in board.columns"
           :key="column.id"
           :column="column"
-          @add-task="addTask(index)"
-          @delete-column="deleteColumn(index)"
+          @add-task="(taskName) => addTask(index, taskName)"
           @update-column="updateColumn"
-          @update-tasks="updateColumnTasks(index, $event)"
+          @delete-column="() => deleteColumn(index)"
+          @update-tasks="tasks => updateColumnTasks(index, tasks)"
           @openTaskModal="openModal"
         />
       </div>
@@ -228,9 +228,9 @@ export default {
         console.error('Ошибка загрузки досок:', errorMessage);
       }
     },
-    addTask(columnIndex) {
+    addTask(columnIndex, taskName = '') {
       this.currentTask = {
-        name: '',
+        name: taskName,
         description: '',
         subtasks: [],
         files: [],
