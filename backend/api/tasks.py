@@ -79,7 +79,7 @@ def generate_ai_response(user_message_id):
 
         # Build chat args
         chat_kwargs = {
-            'model': 'qwen2.5:3b-instruct',
+            'model': 'ZimaBlueAI/Qwen2.5-VL-7B-Instruct:latest',
             'messages': [{'role': 'user', 'content': prompt}],
             'stream': False
         }

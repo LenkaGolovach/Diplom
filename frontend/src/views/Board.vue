@@ -21,6 +21,9 @@
           <button @click="showMembersModal = true" class="members-button">
             👥 Участники
           </button>
+          <button @click="generateBoardReport" class="report-button">
+            <i class="fas fa-chart-bar"></i> Отчёт по проекту
+          </button>
           <button class="add-column-button" @click="addColumn">
             + Добавить колонку
           </button>
@@ -67,6 +70,7 @@ import TaskModal from '../components/TaskModal.vue';
 import axios from 'axios';
 import { reactive } from 'vue';
 import Vue from 'vue';
+import * as XLSX from 'xlsx';
 
 const COLORS = [
   '#61bd4f', '#f2d600', 
@@ -82,7 +86,7 @@ export default {
   },
   props: {
     id: {
-      type: String,
+      type: [String, Number],
       required: true,
     },
   },
@@ -113,7 +117,19 @@ export default {
         : this.board.name
     }
   },
+  watch: {
+    // Добавляем наблюдатель за параметрами URL
+    '$route.query': {
+      handler(query) {
+        if (query.task) {
+          this.openTaskFromQuery(query.task);
+        }
+      },
+      immediate: true
+    }
+  },
   async created() {
+    console.log('Board component created with id:', this.id)
     await this.fetchUser();
     await this.fetchBoardData();
   },
@@ -130,20 +146,22 @@ export default {
     },
     async fetchBoardData() {
       try {
+        console.log('Fetching board data for id:', this.id)
         const response = await axios.get(`/api/boards/${this.id}/`, {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('token')}`,
           },
           params: {
-            include_tasks: true // Добавляем параметр для включения задач
+            include_tasks: true
           }
         });
+        console.log('Board data received:', response.data)
         // Гарантируем наличие массива columns
         this.board = {
           ...response.data,
           columns: response.data.columns.map(column => ({
             ...column,
-            tasks: column.tasks || [] // Гарантируем наличие массива задач
+            tasks: column.tasks || []
           }))
         };
         
@@ -153,6 +171,10 @@ export default {
         });
       } catch (error) {
         console.error('Ошибка загрузки доски:', error);
+        if (error.response) {
+          console.error('Response data:', error.response.data);
+          console.error('Response status:', error.response.status);
+        }
       }
     },
     async saveBoard() {
@@ -214,18 +236,10 @@ export default {
         console.error('Ошибка загрузки досок:', errorMessage);
       }
     },
-    async updateColumn(column) {
-      try {
-        await axios.put(`/api/columns/${column.id}/`, column, {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-          },
-        });
-      } catch (error) {
-        const errorMessage = error.response && error.response.data 
-          ? error.response.data 
-          : error.message;
-        console.error('Ошибка загрузки досок:', errorMessage);
+    updateColumn(updatedColumn) {
+      const index = this.board.columns.findIndex(col => col.id === updatedColumn.id);
+      if (index !== -1) {
+        this.board.columns[index] = updatedColumn;
       }
     },
     addTask(columnIndex, taskName = '') {
@@ -310,6 +324,61 @@ export default {
         files: [],
       };
       this.currentColumnIndex = null;
+    },
+    // Добавляем метод для открытия задачи из URL
+    async openTaskFromQuery(taskId) {
+      try {
+        const response = await axios.get(`/api/tasks/${taskId}/`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+        });
+        this.currentTask = response.data;
+        this.showModal = true;
+      } catch (error) {
+        console.error('Ошибка загрузки задачи:', error);
+      }
+    },
+    async generateBoardReport() {
+      try {
+        const response = await axios.get(`/api/reports/`, {
+          params: {
+            report_type: 'projects',
+            board_id: this.id
+          },
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        
+        // Создаем рабочую книгу Excel
+        const ws = XLSX.utils.json_to_sheet(response.data.projects);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Board Report');
+        
+        // Добавляем лист с общей статистикой
+        const summaryData = [
+          ['Всего проектов', response.data.statistics.total_projects],
+          ['Активных проектов', response.data.statistics.active_projects],
+          ['Завершённых проектов', response.data.statistics.completed_projects]
+        ];
+        const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
+        XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
+        
+        // Генерируем имя файла с датой
+        const date = new Date().toISOString().split('T')[0];
+        const filename = `board_report_${this.id}_${date}.xlsx`;
+        
+        // Скачиваем файл
+        XLSX.writeFile(wb, filename);
+      } catch (error) {
+        console.error('Ошибка при формировании отчёта:', error);
+        if (error.response) {
+          console.error('Response data:', error.response.data);
+          console.error('Response status:', error.response.status);
+        }
+        alert('Произошла ошибка при формировании отчёта. Пожалуйста, попробуйте снова.');
+      }
     },
   },
 };
@@ -479,5 +548,21 @@ export default {
   .columns-container {
     padding: 20px;
   }
+}
+
+.report-button {
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s;
+  margin-left: 10px;
+}
+
+.report-button:hover {
+  background-color: #45a049;
 }
 </style>

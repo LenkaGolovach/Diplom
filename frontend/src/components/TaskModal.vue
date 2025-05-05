@@ -48,6 +48,26 @@
                 class="description-input"
               ></textarea>
             </div>
+      <!-- Приоритет задачи -->
+      <div class="form-group">
+        <label>Приоритет:</label>
+        <select
+          v-model="localTask.priority"
+          class="form-control"
+        >
+          <option value="high">Высокий</option>
+          <option value="medium">Средний</option>
+          <option value="low">Низкий</option>
+        </select>
+      </div>
+
+      <!-- Прогресс-бар (только если есть подзадачи) -->
+      <div v-if="hasSubtasks" class="progress-container">
+        <div class="progress-bar">
+          <div class="progress" :style="{ width: progress + '%' }"></div>
+        </div>
+        <div class="progress-text">{{ progress }}% выполнено</div>
+      </div>
 
             <!-- Прогресс-бар -->
             <div v-if="hasSubtasks" class="progress-container">
@@ -493,6 +513,9 @@
       <!-- Кнопки управления -->
       <div class="actions">
         <button @click="saveTask" class="save-button">Сохранить</button>
+        <button @click="generateTaskReport" class="report-button">
+          <i class="fas fa-chart-bar"></i> Отчёт по задаче
+        </button>
         <button @click="closeModal" class="close-button">Закрыть</button>
       </div>
     </div>
@@ -503,6 +526,7 @@
 import axios from 'axios';
 import GitHubService from '@/services/GitHubService';
 import DiscussionChat from '@/components/DiscussionChat.vue';
+import * as XLSX from 'xlsx';
 
 export default {
   components: {
@@ -529,6 +553,7 @@ export default {
         files: Array.isArray(this.task.attachments) ? [...this.task.attachments] : [],
         column: this.task.column,
         members: Array.isArray(this.task.members) ? [...this.task.members] : [],
+        priority: this.task.priority || 'medium'
       },
       uploadedFiles: [],
       deletedFileIds: [],
@@ -557,6 +582,42 @@ export default {
     hasSubtasks() {
       return this.localTask.subtasks && this.localTask.subtasks.length > 0;
     },
+  },
+  watch: {
+    task: {
+      handler(newTask) {
+        this.localTask = {
+          id: newTask.id,
+          name: newTask.name || '',
+          description: newTask.description || '',
+          subtasks: Array.isArray(newTask.subtasks) ? [...newTask.subtasks] : [],
+          files: Array.isArray(newTask.attachments) ? [...newTask.attachments] : [],
+          column: newTask.column,
+          members: Array.isArray(newTask.members) ? [...newTask.members] : [],
+          priority: newTask.priority || 'medium'
+        };
+      },
+      deep: true
+    },
+    selectedGitHubAction(newAction) {
+      if (newAction && !this.linkedRepo) {
+        this.fetchRecentRepos();
+      } else if (newAction === 'track-commits' && this.linkedRepo) {
+        this.refreshCommits();
+      } else if (newAction === 'view-prs' && this.linkedRepo) {
+        this.refreshPRs();
+      } else if (newAction === 'repo-info' && this.linkedRepo) {
+        this.refreshRepoInfo();
+      }
+    },
+    'localTask.subtasks': {
+      handler() {
+        this.$nextTick(() => {
+          this.adjustSubtasksHeight();
+        });
+      },
+      deep: true
+    }
   },
   methods: {
     startEditingTitle() {
@@ -688,6 +749,8 @@ export default {
                          
         formData.append('name', taskName);
         formData.append('description', this.localTask.description || '');
+        formData.append('priority', this.localTask.priority);
+        formData.append('order', '0');
         
         const columnId = this.localTask.column instanceof Object 
           ? this.localTask.column.id 
@@ -743,34 +806,46 @@ export default {
         };
         
         let response;
-        try {
-          if (this.localTask.id) {
-            response = await axios.patch(`/api/tasks/${this.localTask.id}/`, formData, config);
-          } else {
-            response = await axios.post('/api/tasks/', formData, config);
-          }
-          
-          // Обновляем локальные данные задачи после сохранения
-          this.localTask = response.data;
-          
-          // Проверяем участие пользователя в задаче
-          await this.checkParticipation();
-          
-          this.$emit('saveTask', response.data);
-          this.closeModal();
-          
-        } catch (apiError) {
-          console.error('Ошибка API при сохранении задачи:', apiError);
-          if (apiError.response) {
-            console.error('Ответ сервера:', apiError.response.data);
-            throw new Error(`Ошибка сервера: ${JSON.stringify(apiError.response.data)}`);
-          } else {
-            throw apiError;
-          }
+        
+        if (this.localTask.id) {
+          response = await axios.patch(`/api/tasks/${this.localTask.id}/`, formData, config);
+        } else {
+          response = await axios.post('/api/tasks/', formData, config);
         }
+        
+        // Обновляем локальные данные задачи после сохранения
+        const updatedTask = {
+          ...response.data,
+          subtasks: response.data.subtasks || [],
+          files: response.data.attachments || []
+        };
+        
+        this.localTask = updatedTask;
+        
+        // Проверяем участие пользователя в задаче
+        await this.checkParticipation();
+        
+        // Передаем обновленную задачу в родительский компонент
+        this.$emit('saveTask', updatedTask);
+        this.closeModal();
+        
       } catch (error) {
         console.error('Ошибка сохранения задачи:', error);
-        alert(`Ошибка: ${error.message}`);
+        let errorMessage = 'Произошла ошибка при сохранении задачи';
+        
+        if (error.response) {
+          if (error.response.data) {
+            if (typeof error.response.data === 'object') {
+              errorMessage = Object.values(error.response.data).flat().join('\n');
+            } else {
+              errorMessage = error.response.data;
+            }
+          }
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+        
+        alert(errorMessage);
       }
     },
     removeFile(index) {
@@ -798,14 +873,16 @@ export default {
         return;
       }
       try {
-        const response = await axios.get(`/api/tasks/${this.localTask.id}/members/`, {
+        const response = await axios.get(`/api/tasks/${this.localTask.id}/`, {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('token')}`
           }
         });
-        this.isParticipant = response.data.some(m => m.email === this.$store.state.user.email);
+        // Проверяем, есть ли текущий пользователь в списке участников
+        this.isParticipant = response.data.members.some(m => m.email === this.$store.state.user.email);
       } catch (error) {
         console.error('Ошибка проверки участия:', error);
+        this.isParticipant = false;
       }
     },
     async toggleParticipation() {
@@ -1007,27 +1084,63 @@ export default {
       // Сбрасываем значение новой подзадачи
       this.newSubtaskName = '';
     },
-  },
-  watch: {
-    selectedGitHubAction(newAction) {
-      if (newAction && !this.linkedRepo) {
-        this.fetchRecentRepos();
-      } else if (newAction === 'track-commits' && this.linkedRepo) {
-        this.refreshCommits();
-      } else if (newAction === 'view-prs' && this.linkedRepo) {
-        this.refreshPRs();
-      } else if (newAction === 'repo-info' && this.linkedRepo) {
-        this.refreshRepoInfo();
+    async generateTaskReport() {
+      try {
+        const response = await axios.get(`/api/reports/`, {
+          params: {
+            report_type: 'tasks',
+            task_id: this.localTask.id
+          },
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        
+        // Создаем рабочую книгу Excel
+        const workbook = XLSX.utils.book_new();
+        
+        // Основная информация о задаче
+        const taskData = [{
+          'Название': response.data.name,
+          'Описание': response.data.description,
+          'Статус': response.data.status,
+          'Приоритет': response.data.priority,
+          'Проект': response.data.project,
+          'Создано': new Date(response.data.created_at).toLocaleDateString(),
+          'Обновлено': new Date(response.data.updated_at).toLocaleDateString(),
+          'Участники': response.data.members.join(', ')
+        }];
+        
+        const taskWs = XLSX.utils.json_to_sheet(taskData);
+        XLSX.utils.book_append_sheet(workbook, taskWs, 'Информация о задаче');
+        
+        // Добавляем лист с подзадачами, если они есть
+        if (this.localTask.subtasks && this.localTask.subtasks.length > 0) {
+          const subtasksData = this.localTask.subtasks.map(subtask => ({
+            'Название': subtask.name,
+            'Статус': subtask.completed ? 'Выполнено' : 'Не выполнено',
+            'Создано': new Date(subtask.created_at).toLocaleDateString(),
+            'Обновлено': new Date(subtask.updated_at).toLocaleDateString()
+          }));
+          const subtasksWs = XLSX.utils.json_to_sheet(subtasksData);
+          XLSX.utils.book_append_sheet(workbook, subtasksWs, 'Подзадачи');
+        }
+        
+        // Генерируем имя файла с датой
+        const date = new Date().toISOString().split('T')[0];
+        const filename = `task_report_${this.localTask.id}_${date}.xlsx`;
+        
+        // Скачиваем файл
+        XLSX.writeFile(workbook, filename);
+      } catch (error) {
+        console.error('Ошибка при формировании отчёта:', error);
+        if (error.response) {
+          console.error('Response data:', error.response.data);
+          console.error('Response status:', error.response.status);
+        }
+        alert('Произошла ошибка при формировании отчёта. Пожалуйста, попробуйте снова.');
       }
     },
-    'localTask.subtasks': {
-      handler() {
-        this.$nextTick(() => {
-          this.adjustSubtasksHeight();
-        });
-      },
-      deep: true
-    }
   },
   mounted() {
     if (this.localTask.id) {
@@ -2738,5 +2851,42 @@ export default {
 .error-commit {
   background-color: rgba(215, 58, 73, 0.05);
   border-left: 3px solid #cb2431;
+}
+
+.form-group {
+  margin-bottom: 15px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+
+.form-control {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+select.form-control {
+  height: 36px;
+}
+
+.report-button {
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s;
+}
+
+.report-button:hover {
+  background-color: #45a049;
 }
 </style>

@@ -4,6 +4,8 @@ import Register from '../components/Auth/Register.vue';
 import BoardsList from '../views/BoardsList.vue';
 import Board from '../views/Board.vue';
 import NeuroChat from '@/views/NeuroChat.vue';
+import SearchView from '../views/SearchView.vue';
+import ReportsView from '../components/ReportsView.vue';
 
 const routes = [
   { path: '/', redirect: '/login' },
@@ -37,6 +39,18 @@ const routes = [
     path: '/neuro-chat',
     name: 'NeuroChat',
     component: NeuroChat,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/search',
+    name: 'Search',
+    component: SearchView,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/reports',
+    name: 'reports',
+    component: ReportsView,
     meta: { requiresAuth: true }
   }
 ];

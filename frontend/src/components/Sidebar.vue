@@ -1,50 +1,62 @@
 <template>
   <div class="sidebar" :class="{ 'sidebar-open': isOpen }">
-    <div class="user-info" v-if="user">
-      <img :src="avatarUrl" class="avatar" alt="Avatar">
-      <div class="user-name">{{ fullName }}</div>
+    <div class="sidebar-header">
+      <h2>Меню</h2>
     </div>
-    
-    <nav class="menu">
-      <router-link to="/profile" class="menu-item">
-        <span class="icon">👤</span> Профиль
-      </router-link>
-      <router-link to="/boards" class="menu-item">
-        <span class="icon">📋</span> Проекты
-      </router-link>
-      <router-link to="/neuro-chat" class="menu-item">
-        <span class="icon">֎</span> Нейро-чат
-      </router-link>
-    </nav>
-
-    <button class="logout-btn" @click="logout">
-      <span class="icon">🚪</span> Выйти
-    </button>
+    <div class="sidebar-content">
+      <div class="user-info" v-if="currentUser">
+        <img :src="currentUser.avatar" alt="Avatar" class="avatar" v-if="currentUser.avatar">
+        <div class="user-details">
+          <span class="user-name">{{ currentUser.first_name }} {{ currentUser.last_name }}</span>
+          <span class="user-email">{{ currentUser.email }}</span>
+        </div>
+      </div>
+      
+      <div class="menu">
+        <router-link to="/boards" class="menu-item">
+          <span class="icon">📋</span> Доски
+        </router-link>
+        <router-link to="/search" class="menu-item">
+          <span class="icon">🔍</span> Поиск задач
+        </router-link>
+        <router-link to="/neuro-chat" class="menu-item">
+          <span class="icon">֎</span> Нейро-чат
+        </router-link>
+      </div>
+      
+      <button class="logout-btn" @click="logout">
+        <span class="icon">🚪</span> Выйти
+      </button>
+    </div>
   </div>
 </template>
 
 <script>
+import { computed } from 'vue'
+import { useStore } from 'vuex'
+import { useRouter } from 'vue-router'
+
 export default {
-  computed: {
-    user() {
-      return this.$store.state.user;
-    },
-    fullName() {
-      if (!this.user) return '';
-      return [this.user.first_name, this.user.last_name].filter(Boolean).join(' ') || this.user.email;
-    },
-    avatarUrl() {
-      if (!this.user) return 'https://www.gravatar.com/avatar/?d=identicon';
-      return this.user.avatar_url || 'https://www.gravatar.com/avatar/?d=identicon';
+  name: 'Sidebar',
+  props: {
+    isOpen: {
+      type: Boolean,
+      required: true
     }
   },
-  props: {
-    isOpen: Boolean,
-  },
-  methods: {
-    logout() {
-      this.$store.dispatch('logout');
-      this.$router.push('/login');
+  setup() {
+    const store = useStore()
+    const router = useRouter()
+    const currentUser = computed(() => store.getters.currentUser)
+
+    const logout = async () => {
+      await store.dispatch('logout')
+      router.push('/login')
+    }
+
+    return {
+      currentUser,
+      logout
     }
   }
 }
@@ -72,6 +84,24 @@ export default {
   box-shadow: 5px 0 30px rgba(0, 0, 0, 0.15);
 }
 
+.sidebar-header {
+  margin-bottom: 20px;
+  border-bottom: 1px solid rgba(221, 221, 221, 0.5);
+  padding-bottom: 15px;
+}
+
+.sidebar-header h2 {
+  margin: 0;
+  font-size: 1.5em;
+  color: #2c3e50;
+}
+
+.sidebar-content {
+  display: flex;
+  flex-direction: column;
+  height: calc(100% - 60px);
+}
+
 .user-info {
   display: flex;
   flex-direction: column;
@@ -96,6 +126,11 @@ export default {
   transform: scale(1.05);
 }
 
+.user-details {
+  text-align: center;
+  margin-bottom: 10px;
+}
+
 .user-name {
   font-weight: 600;
   font-size: 1.2em;
@@ -103,10 +138,18 @@ export default {
   color: #2c3e50;
   font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
   letter-spacing: 0.3px;
+  display: block;
+}
+
+.user-email {
+  display: block;
+  font-size: 0.9em;
+  color: #666;
 }
 
 .menu {
   margin: 20px 0;
+  flex-grow: 1;
 }
 
 .menu-item {
@@ -130,7 +173,8 @@ export default {
   color: #2c3e50;
 }
 
-.menu-item.router-link-exact-active {
+.menu-item.router-link-exact-active,
+.menu-item.router-link-active {
   background: rgba(91, 156, 255, 0.1);
   color: #5b9cff;
   font-weight: 600;
@@ -142,11 +186,7 @@ export default {
 }
 
 .logout-btn {
-  position: absolute;
-  bottom: 30px;
-  width: calc(100% - 40px);
-  left: 20px;
-  right: 20px;
+  margin-top: auto;
   padding: 14px;
   background: rgba(255, 123, 147, 0.1);
   color: #ff7b93;
