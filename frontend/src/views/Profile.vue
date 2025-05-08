@@ -100,18 +100,82 @@ export default {
       if(!file) return;
       
       this.saving = true;
-      const formData = new FormData();
-      formData.append('avatar', file);
       
+      // Проверяем размер файла (ограничение 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Размер файла не должен превышать 5MB');
+        this.saving = false;
+        return;
+      }
+
+      // Проверяем тип файла
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+      if (!allowedTypes.includes(file.type)) {
+        alert('Пожалуйста, загрузите изображение (JPEG, PNG, GIF, WEBP или SVG)');
+        this.saving = false;
+        return;
+      }
+
       try {
-        await this.$store.dispatch('updateUser', formData);
-        // Success notification
-        alert('Аватар обновлен');
+        console.log('Загрузка файла:', file.name, 'тип:', file.type, 'размер:', file.size);
+        
+        // Вернемся к использованию axios, с правильными настройками
+        const formData = new FormData();
+        formData.append('avatar', file);
+        
+        const token = localStorage.getItem('token');
+        
+        // Используем axios без установки Content-Type - он сам определит правильный для FormData
+        const response = await axios.patch('/api/users/me/', formData, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        console.log('Ответ сервера:', response);
+        
+        // Перезагружаем пользователя из API
+        await this.$store.dispatch('fetchUser');
+        
+        // Обновляем локальные данные
+        await this.loadUserData();
+        
+        // Показываем успешное уведомление
+        alert('Аватар успешно обновлен');
       } catch (error) {
+        // Выводим более полную информацию об ошибке для отладки
         console.error('Ошибка загрузки аватара:', error);
-        alert('Произошла ошибка при загрузке аватара');
+        
+        let errorMessage = 'Произошла ошибка при загрузке аватара';
+        
+        if (error.response) {
+          // Если ответ от сервера содержит данные
+          console.error('Статус ответа:', error.response.status);
+          console.error('Заголовки ответа:', error.response.headers);
+          
+          // Попробуем получить текст ошибки
+          try {
+            if (error.response.data) {
+              if (typeof error.response.data === 'object') {
+                errorMessage = JSON.stringify(error.response.data);
+              } else {
+                errorMessage = String(error.response.data).substring(0, 100); // Ограничиваем длину
+              }
+            }
+          } catch (e) {
+            console.error('Ошибка при обработке данных ответа:', e);
+          }
+        } else if (error.request) {
+          errorMessage = 'Сервер не ответил на запрос';
+        } else {
+          errorMessage = `Ошибка: ${error.message}`;
+        }
+        
+        alert(errorMessage);
       } finally {
         this.saving = false;
+        // Очищаем значение input[type=file] для возможности повторной загрузки того же файла
+        this.$refs.avatarInput.value = '';
       }
     },
     async saveProfile() {
@@ -166,6 +230,7 @@ export default {
   border: 1px solid rgba(255, 255, 255, 0.4);
   padding: 40px;
   animation: fadeIn 0.5s ease;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
 }
 
 @keyframes fadeIn {
@@ -178,7 +243,7 @@ export default {
   color: #2c3e50;
   margin: 0 0 30px 0;
   font-weight: 600;
-  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   letter-spacing: 0.5px;
   text-align: center;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
@@ -192,7 +257,7 @@ export default {
   padding: 50px;
   font-size: 18px;
   color: #5e6c84;
-  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
 }
 
 .spinner {
@@ -264,7 +329,7 @@ export default {
   cursor: pointer;
   font-size: 16px;
   font-weight: 500;
-  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   transition: all 0.3s ease;
   display: flex;
   align-items: center;
@@ -304,7 +369,7 @@ export default {
   margin-bottom: 8px;
   font-weight: 500;
   color: #2c3e50;
-  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   font-size: 16px;
   letter-spacing: 0.3px;
 }
@@ -315,7 +380,7 @@ export default {
   border: 1px solid #ccc;
   border-radius: 8px;
   font-size: 16px;
-  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   transition: all 0.3s ease;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03);
 }
@@ -342,7 +407,7 @@ export default {
   margin-top: 30px;
   font-size: 16px;
   font-weight: 500;
-  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   transition: all 0.3s ease;
   display: flex;
   align-items: center;

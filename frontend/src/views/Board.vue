@@ -18,13 +18,13 @@
           class="board-title-input"
         />
         <div class="header-buttons">
-          <button @click="showMembersModal = true" class="members-button">
+          <button @click="showMembersModal = true" class="members-button header-button">
             👥 Участники
           </button>
-          <button @click="generateBoardReport" class="report-button">
+          <button @click="generateBoardReport" class="report-button header-button">
             <i class="fas fa-chart-bar"></i> Отчёт по проекту
           </button>
-          <button class="add-column-button" @click="addColumn">
+          <button class="add-column-button header-button" @click="addColumn">
             + Добавить колонку
           </button>
         </div>
@@ -400,57 +400,104 @@ export default {
 }
 
 .board-header {
-  padding: 16px 30px;
-  background: rgba(255, 255, 255, 0.85);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.07);
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  padding: 15px 20px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
   backdrop-filter: blur(5px);
   -webkit-backdrop-filter: blur(5px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.4);
 }
 
 .board-title-wrapper {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  width: 100%;
+}
+
+.board-title {
+  font-size: 1.8em;
+  font-weight: 600;
+  color: #2c3e50;
+  cursor: pointer;
+  padding: 5px 10px;
+  border-radius: 8px;
+  transition: background-color 0.2s ease;
+  margin-right: auto; /* Заголовок слева */
+}
+
+.board-title:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.board-title-input {
+  font-size: 1.8em;
+  font-weight: 600;
+  color: #2c3e50;
+  padding: 5px 10px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  margin-right: auto; /* Заголовок слева */
 }
 
 .header-buttons {
   display: flex;
-  gap: 15px;
-  align-items: center;
+  gap: 15px; /* Отступы между кнопками */
+  margin-left: 20px; /* Отступ от заголовка */
 }
 
-.board-title {
-  font-size: 22px;
-  font-weight: 600;
-  padding: 6px 12px;
-  border-radius: 8px;
+/* --- ДОБАВЛЕННЫЕ/ИЗМЕНЕННЫЕ СТИЛИ --- */
+.header-button { /* Общий стиль для кнопок в хедере */
+  padding: 10px 18px;
+  border: none;
+  border-radius: 10px;
   cursor: pointer;
-  color: #2c3e50;
-  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
-  letter-spacing: 0.3px;
+  font-size: 15px;
+  font-weight: 500;
   transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px; /* Отступ между иконкой и текстом */
+  background: rgba(240, 242, 245, 0.8); /* Светло-серый фон */
+  color: #4a5568; /* Темно-серый текст */
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
 }
 
-.board-title:hover {
-  background: rgba(0, 0, 0, 0.05);
+.header-button:hover {
+  background: rgba(230, 232, 235, 0.9);
   transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
 }
 
-.board-title-input {
-  font-size: 22px;
-  font-weight: 600;
-  padding: 6px 12px;
-  border: 2px solid #5a9bd4;
-  border-radius: 8px;
-  width: 300px;
-  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
-  box-shadow: 0 0 0 3px rgba(90, 155, 212, 0.2);
-  outline: none;
+.members-button {
+  /* Убираем специфичные стили, если они были */
 }
+
+.report-button {
+  /* Убираем старые стили, если они тут были */
+  /* background: #4CAF50; - УДАЛЕНО */
+  /* color: white; - УДАЛЕНО */
+}
+
+.report-button i {
+  font-size: 1.1em;
+}
+
+.add-column-button {
+  /* Оставляем специфичный синий фон */
+  background: rgba(91, 156, 255, 0.9); 
+  color: white;
+  box-shadow: 0 2px 8px rgba(91, 156, 255, 0.3);
+}
+
+.add-column-button:hover {
+  background: rgba(74, 139, 255, 1);
+  box-shadow: 0 4px 12px rgba(74, 139, 255, 0.4);
+}
+/* --- КОНЕЦ ДОБАВЛЕННЫХ/ИЗМЕНЕННЫХ СТИЛЕЙ --- */
 
 .columns-container {
   flex: 1;
@@ -550,6 +597,8 @@ export default {
   }
 }
 
+/* СТИЛИ НИЖЕ БУДУТ УДАЛЕНЫ */
+/*
 .report-button {
   background-color: #4CAF50;
   color: white;
@@ -565,4 +614,5 @@ export default {
 .report-button:hover {
   background-color: #45a049;
 }
+*/
 </style>

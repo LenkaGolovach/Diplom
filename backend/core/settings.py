@@ -14,6 +14,7 @@ from pathlib import Path
 import environ
 import os
 from datetime import timedelta
+import logging
 
 # Инициализация django-environ
 env = environ.Env()
@@ -33,8 +34,6 @@ SECRET_KEY = 'django-insecure-jf)$ori_%0ln9(i&2jmxy!#b*efb%8t_)8j9f6@dizak1lbreq
 DEBUG = True
 
 ALLOWED_HOSTS = []
-
-FRONTEND_URL = 'http://localhost:8080'
 
 # Application definition
 
@@ -247,5 +246,9 @@ STATICFILES_DIRS = [BASE_DIR / 'static']
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# Настройки для медиа-файлов
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# URL для фронтенда для генерации инвайтов
+FRONTEND_URL = 'http://localhost:8080'

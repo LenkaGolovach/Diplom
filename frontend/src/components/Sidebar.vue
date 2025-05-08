@@ -13,6 +13,9 @@
       </div>
       
       <div class="menu">
+        <router-link to="/profile" class="menu-item">
+          <span class="icon">👤</span> Профиль
+        </router-link>
         <router-link to="/boards" class="menu-item">
           <span class="icon">📋</span> Доски
         </router-link>
@@ -77,6 +80,7 @@ export default {
   border-right: 1px solid rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
 }
 
 .sidebar-open {
@@ -94,6 +98,8 @@ export default {
   margin: 0;
   font-size: 1.5em;
   color: #2c3e50;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  font-weight: 500;
 }
 
 .sidebar-content {
@@ -136,7 +142,7 @@ export default {
   font-size: 1.2em;
   margin-bottom: 5px;
   color: #2c3e50;
-  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   letter-spacing: 0.3px;
   display: block;
 }
@@ -145,6 +151,7 @@ export default {
   display: block;
   font-size: 0.9em;
   color: #666;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
 }
 
 .menu {
@@ -161,7 +168,7 @@ export default {
   border-radius: 12px;
   margin: 10px 0;
   transition: all 0.3s ease;
-  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   font-size: 16px;
   font-weight: 500;
   letter-spacing: 0.3px;
@@ -192,7 +199,7 @@ export default {
   color: #ff7b93;
   border: none;
   border-radius: 12px;
-  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   font-size: 16px;
   font-weight: 500;
   letter-spacing: 0.3px;

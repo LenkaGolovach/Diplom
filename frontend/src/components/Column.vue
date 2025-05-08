@@ -31,22 +31,11 @@
       @change="onTaskChange"
     >
       <template #item="{ element }">
-        <div class="task-card">
-          <div class="task-header" @click="openTaskModal(element)">
-            <div class="task-title">{{ element.name }}</div>
-            <div class="priority-label" :class="getPriorityClass(element.priority)">
-              {{ getPriorityText(element.priority) }}
-            </div>
-          </div>
-          <div class="task-meta">
-            <div v-if="element.subtasks && element.subtasks.length > 0" class="subtasks-info">
-              {{ getCompletedSubtasksCount(element) }}/{{ element.subtasks.length }}
-            </div>
-            <div v-if="element.attachments && element.attachments.length > 0" class="attachments-info">
-              📎 {{ element.attachments.length }}
-            </div>
-          </div>
-        </div>
+        <Task 
+          :task="element" 
+          @click="openTaskModal(element)"
+          @delete="deleteTask(element)" 
+        />
       </template>
     </draggable>
 
@@ -93,7 +82,7 @@ export default {
   },
   data() {
     return {
-      tasks: this.column.tasks,
+      tasks: Array.isArray(this.column.tasks) ? [...this.column.tasks] : [],
       isEditing: false,
       showTaskForm: false,
       newTaskName: '',
@@ -135,62 +124,34 @@ export default {
       }
     },
     async onTaskChange(event) {
-      // Если задача была перемещена из одной колонки в другую
-      if (event.added) {
-        const task = event.added.element;
+      console.log('Draggable change event:', event);
+      const movedTask = event.moved ? event.moved.element : null;
+      const addedTask = event.added ? event.added.element : null;
+      const removedTask = event.removed ? event.removed.element : null;
+
+      // Обновляем весь список задач для родителя, чтобы он обновил пропсы
+      this.$emit('update-tasks', this.tasks); 
+
+      // Отправляем изменения порядка на сервер
+      this.tasks.forEach((task, index) => {
+         if (task.order !== index || (addedTask && task.id === addedTask.id)) { 
+           this.updateTaskOrder(task, index);
+         }
+      });
+    },
+    async updateTaskOrder(task, newOrder) {
         try {
-          const newOrder = this.tasks.length - 1;
-          
-          await axios.patch(`/api/tasks/${task.id}/`, {
-            column: this.column.id,
-            order: newOrder
-          }, {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('token')}`
-            }
-          });
-          
-          this.$emit('update-tasks', this.tasks);
+            await axios.patch(`/api/tasks/${task.id}/`, {
+                column: this.column.id,
+                order: newOrder
+            }, {
+                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+            });
+            task.order = newOrder; // Обновляем локально для консистентности
         } catch (error) {
-          console.error('Ошибка добавления задачи в колонку:', error);
+            console.error(`Ошибка обновления порядка для задачи ${task.id}:`, error);
+            // Возможно, стоит откатить изменение в UI или показать ошибку
         }
-      }
-      // Если задача была перемещена внутри колонки
-      else if (event.moved) {
-        const task = event.moved.element;
-        try {
-          await axios.patch(`/api/tasks/${task.id}/`, {
-            column: this.column.id,
-            order: event.moved.newIndex
-          }, {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('token')}`
-            }
-          });
-          this.$emit('update-tasks', this.tasks);
-        } catch (error) {
-          console.error('Ошибка перемещения задачи:', error);
-        }
-      }
-      
-      // Если задача была добавлена из другой колонки
-      if (event.added) {
-        const task = event.added.element;
-        try {
-          await axios.patch(`/api/tasks/${task.id}/`, {
-            column: this.column.id,
-            order: event.added.newIndex
-          }, {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('token')}`
-            }
-          });
-          this.$emit('update-tasks', this.tasks);
-        } catch (error) {
-          console.error('Ошибка добавления задачи в колонку:', error);
-          this.tasks = this.tasks.slice().reverse();
-        }
-      }
     },
     createTask() {
       if (!this.newTaskName.trim()) {
@@ -230,25 +191,6 @@ export default {
     openTaskModal(task) {
       this.$emit('openTaskModal', task);
     },
-    getPriorityClass(priority) {
-      const classes = {
-        high: 'priority-high',
-        medium: 'priority-medium',
-        low: 'priority-low'
-      }
-      return classes[priority] || ''
-    },
-    getPriorityText(priority) {
-      const texts = {
-        high: 'Высокий',
-        medium: 'Средний',
-        low: 'Низкий'
-      }
-      return texts[priority] || 'Не указан'
-    },
-    getCompletedSubtasksCount(task) {
-      return task.subtasks.filter((subtask) => subtask.completed).length;
-    }
   },
   watch: {
     showTaskForm(newVal) {
@@ -258,9 +200,9 @@ export default {
         });
       }
     },
-    column: {
-      handler(newColumn) {
-        this.newName = newColumn.name;
+    'column.tasks': {
+      handler(newTasks) {
+        this.tasks = Array.isArray(newTasks) ? [...newTasks] : [];
       },
       deep: true
     }
@@ -270,53 +212,34 @@ export default {
 
 <style scoped>
 .column {
-  background: rgba(255, 255, 255, 0.85);
+  background-color: #f8f9fa;
   border-radius: 12px;
+  padding: 0;
   width: 300px;
-  min-width: 300px;
-  max-width: 350px;
-  margin: 0;
-  padding: 16px;
-  position: relative;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 160px);
-  transition: all 0.3s ease;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  flex-grow: 1;
-}
-
-.column:hover {
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
-  transform: translateY(-2px);
+  max-height: calc(100vh - 180px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
 }
 
 .color-stripe {
-  height: 5px;
-  border-radius: 10px 10px 0 0;
-  margin: -16px -16px 16px -16px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  height: 6px;
+  border-radius: 12px 12px 0 0;
+  margin-bottom: 10px;
 }
 
 .column-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  padding: 10px 15px;
 }
 
 .column-title {
   font-weight: 600;
   font-size: 16px;
-  padding: 8px 10px;
   cursor: pointer;
-  border-radius: 6px;
-  flex: 1;
   color: #2c3e50;
   font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
   letter-spacing: 0.3px;
@@ -363,26 +286,23 @@ export default {
 }
 
 .tasks {
-  flex: 1;
+  padding: 0 10px 10px 10px;
   overflow-y: auto;
-  min-height: 40px;
-  padding: 5px 0;
-  margin: 0 -5px;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.1) transparent;
+  flex-grow: 1;
+  min-height: 60px;
 }
 
 .tasks::-webkit-scrollbar {
-  width: 5px;
-}
-
-.tasks::-webkit-scrollbar-track {
-  background: transparent;
+  width: 6px;
 }
 
 .tasks::-webkit-scrollbar-thumb {
-  background-color: rgba(0, 0, 0, 0.1);
-  border-radius: 10px;
+  background-color: #ccc;
+  border-radius: 3px;
+}
+
+.tasks::-webkit-scrollbar-track {
+  background-color: transparent;
 }
 
 .add-task-button {
@@ -476,57 +396,5 @@ export default {
 .cancel-task-button:hover {
   background: rgba(231, 76, 60, 0.1);
   color: #e74c3c;
-}
-
-.task-card {
-  background: white;
-  border-radius: 8px;
-  padding: 12px;
-  margin-bottom: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-  cursor: pointer;
-}
-
-.task-card:hover {
-  background: #f8f9fa;
-}
-
-.task-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 8px;
-}
-
-.task-title {
-  font-weight: 500;
-  flex: 1;
-  margin-right: 10px;
-  color: #000000;
-}
-
-.priority-label {
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 0.8em;
-  font-weight: bold;
-}
-
-.priority-high {
-  background-color: #ffebee;
-  color: #d32f2f;
-  border: 1px solid #ffcdd2;
-}
-
-.priority-medium {
-  background-color: #fff3e0;
-  color: #f57c00;
-  border: 1px solid #ffe0b2;
-}
-
-.priority-low {
-  background-color: #e8f5e9;
-  color: #388e3c;
-  border: 1px solid #c8e6c9;
 }
 </style>

@@ -69,14 +69,6 @@
         <div class="progress-text">{{ progress }}% выполнено</div>
       </div>
 
-            <!-- Прогресс-бар -->
-            <div v-if="hasSubtasks" class="progress-container">
-              <div class="progress-bar">
-                <div class="progress" :style="{ width: progress + '%' }"></div>
-              </div>
-              <div class="progress-text">{{ progress }}% выполнено</div>
-            </div>
-
             <!-- Подзадачи -->
             <div class="subtask-add-form">
               <input 
@@ -2876,17 +2868,26 @@ select.form-control {
 }
 
 .report-button {
-  background-color: #4CAF50;
-  color: white;
+  /* Применяем стиль, похожий на close-button */
+  background: #f0f0f0;
+  color: #4a5568;
+  padding: 12px 20px;
   border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
-  font-size: 14px;
-  transition: background-color 0.3s;
+  font-size: 15px;
+  font-weight: 500;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  transition: all 0.3s ease;
+  display: flex; /* Добавляем для выравнивания иконки */
+  align-items: center; /* Выравниваем иконку по центру */
+  gap: 8px; /* Добавляем отступ для иконки */
 }
 
 .report-button:hover {
-  background-color: #45a049;
+  /* Стиль при наведении, как у close-button */
+  background: #e0e0e0;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
 }
 </style>

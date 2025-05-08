@@ -23,6 +23,7 @@ import logging
 import json
 import socketio
 import eventlet
+from rest_framework import serializers
 
 # импорт моделей
 from .models import (
@@ -327,13 +328,49 @@ class RegisterView(APIView):
 class UserViewSet(viewsets.ModelViewSet):
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
-    parser_classes = (MultiPartParser, JSONParser)
+    parser_classes = (MultiPartParser, JSONParser, FormParser)
 
     def get_object(self):
         return self.request.user
 
     def get_queryset(self):
         return CustomUser.objects.filter(id=self.request.user.id)
+    
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+    
+    def partial_update(self, request, *args, **kwargs):
+        """
+        Специальный метод для частичного обновления данных пользователя.
+        Используется для обработки формы с файлами.
+        """
+        logger.info(f"Получен запрос на обновление пользователя: {request.user.email}")
+        logger.info(f"Данные формы: {request.data}")
+        logger.info(f"Файлы: {request.FILES}")
+        
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=True, context={'request': request})
+        
+        try:
+            serializer.is_valid(raise_exception=True)
+            self.perform_update(serializer)
+            return Response(serializer.data)
+        except Exception as e:
+            logger.error(f"Ошибка при обновлении пользователя: {str(e)}", exc_info=True)
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+    def perform_update(self, serializer):
+        """
+        Метод для выполнения обновления.
+        Добавлен дополнительный обработчик ошибок.
+        """
+        try:
+            serializer.save()
+        except Exception as e:
+            logger.error(f"Ошибка при сохранении пользователя: {str(e)}", exc_info=True)
+            raise serializers.ValidationError({"error": str(e)})
 
 class MessageViewSet(viewsets.ModelViewSet):
     serializer_class = MessageSerializer

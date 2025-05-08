@@ -105,15 +105,27 @@ export default {
 .page-wrapper {
   display: flex;
   justify-content: center;
-  height: 100vh;
+  height: 100vh; 
+  background-color: #eef2f5; 
+  padding: 20px; 
+  box-sizing: border-box;
 }
 .inner-container {
   width: 100%;
-  max-width: 1200px;  /* whatever limit you like */
+  max-width: 1000px;  
   display: flex;
   flex-direction: column;
+  flex-grow: 1; 
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08); 
+  border-radius: 12px; 
+  overflow: hidden; 
 }
+
+/* Styles for the <DiscussionChat> component instance itself */
 .discussion-chat {
-  flex: 1;            /* fill remaining vertical space */
+  flex: 1;
+  display: flex; 
+  flex-direction: column;
+  overflow: hidden; 
 }
 </style>

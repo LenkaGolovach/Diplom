@@ -1,23 +1,93 @@
 from rest_framework import serializers
-from .models import Board, Column, Task, SubTask, FileAttachment, CustomUser, BoardMember, TaskMember, MessageAttachment, Message
+from .models import Board, Column, Task, SubTask, FileAttachment, CustomUser, BoardMember, TaskMember, Message, MessageAttachment
+from django.contrib.auth import get_user_model
+from django.utils import timezone
 import logging
+from django.core.files.base import ContentFile
+from django.conf import settings
+import os
+import uuid # Для генерации уникальных имен файлов
 
 logger = logging.getLogger(__name__)
 
 class UserSerializer(serializers.ModelSerializer):
-    avatar = serializers.ImageField(required=False, allow_null=True)
+    avatar = serializers.ImageField(required=False, allow_null=True, use_url=True)
+    avatar_url = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = CustomUser
-        fields = ['id', 'email', 'first_name', 'last_name', 'avatar']
-        read_only_fields = ['id']
+        fields = ['id', 'email', 'first_name', 'last_name', 'avatar', 'avatar_url']
+        read_only_fields = ['id', 'avatar_url']
+
+    def get_avatar_url(self, obj):
+        request = self.context.get('request')
+        if obj.avatar and hasattr(obj.avatar, 'url'):
+            if request:
+                return request.build_absolute_uri(obj.avatar.url)
+            return obj.avatar.url
+        return None
 
     def update(self, instance, validated_data):
-        # Обрабатываем загрузку аватара
-        avatar = validated_data.pop('avatar', None)
-        if avatar:
-            instance.avatar = avatar
-        return super().update(instance, validated_data)
+        logger.info(f"UserSerializer update for user: {instance.email}. Validated_data keys: {list(validated_data.keys())}")
+
+        if 'avatar' in validated_data:
+            new_avatar_uploaded_file = validated_data.pop('avatar')
+
+            if new_avatar_uploaded_file is None:
+                logger.info("Avatar explicitly set to null. Clearing avatar.")
+                if instance.avatar: 
+                    instance.avatar.delete(save=False) # Удаляем старый файл из хранилища
+                instance.avatar = None # Очищаем поле в модели
+            else:
+                logger.info(f"New avatar uploaded: {new_avatar_uploaded_file.name}. Manually saving to media.")
+                
+                # Определяем путь для сохранения
+                # Создаем уникальное имя файла, чтобы избежать коллизий
+                ext = os.path.splitext(new_avatar_uploaded_file.name)[1]
+                filename = f"{uuid.uuid4()}{ext}"
+                avatar_dir = os.path.join(settings.MEDIA_ROOT, 'avatars')
+                os.makedirs(avatar_dir, exist_ok=True) # Убедимся, что директория существует
+                filepath = os.path.join(avatar_dir, filename)
+                
+                logger.info(f"Attempting to save avatar to: {filepath}")
+                
+                try:
+                    # Сохраняем файл вручную
+                    with open(filepath, 'wb+') as destination:
+                        for chunk in new_avatar_uploaded_file.chunks():
+                            destination.write(chunk)
+                    logger.info(f"Avatar saved manually to {filepath}")
+                    
+                    # Удаляем старый аватар, если он был
+                    if instance.avatar:
+                        instance.avatar.delete(save=False)
+                        
+                    # Присваиваем относительный путь к полю avatar
+                    # Путь должен быть относительно MEDIA_ROOT
+                    instance.avatar = os.path.join('avatars', filename)
+                    logger.info(f"Assigned path to instance.avatar: {instance.avatar.name}")
+                    
+                except Exception as e:
+                    logger.error(f"Error manually saving avatar ({new_avatar_uploaded_file.name}) to {filepath}: {str(e)}", exc_info=True)
+                    # Если произошла ошибка, пытаемся удалить частично записанный файл, если он есть
+                    if os.path.exists(filepath):
+                        try:
+                            os.remove(filepath)
+                        except Exception as rm_err:
+                            logger.error(f"Could not remove partially saved file {filepath}: {rm_err}")
+                    raise serializers.ValidationError({'avatar': f'Could not save uploaded file: {str(e)}'})
+        
+        # Обновить другие поля
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        try:
+            instance.save()
+            logger.info(f"User instance saved: {instance.id}, Avatar field value: {instance.avatar.name if instance.avatar else 'None'}")
+            return instance
+        except Exception as e:
+            logger.error(f"Error saving user model instance {instance.email}: {str(e)}", exc_info=True)
+            raise serializers.ValidationError({'detail': f'An error occurred while saving user data: {str(e)}'})
 
 class SubTaskSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(required=False)

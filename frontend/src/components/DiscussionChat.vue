@@ -389,328 +389,383 @@ export default {
 
 
 <style scoped>
-.text {
-  /* preserve newlines */
-  white-space: pre-wrap;
-}
-
+/* Общие стили чата */
 .chat-container {
   display: flex;
   flex-direction: column;
-  height: 500px;
-  border: 1px solid #ddd;
+  height: 100%; /* Занимает всю доступную высоту родителя */
+  background-color: #f4f7f9; /* Слегка отличающийся фон для области чата */
   border-radius: 8px;
-  background: #fff;
+  overflow: hidden;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
 }
 
 .messages-list {
-  flex: 1;
-  padding: 15px;
+  flex-grow: 1;
+  padding: 20px;
   overflow-y: auto;
-  background: #f8f9fa;
+  display: flex;
+  flex-direction: column;
 }
 
+/* Стили для разделителя дат */
 .date-divider {
   text-align: center;
   margin: 20px 0;
-  color: #6c757d;
-  font-size: 0.9em;
-  position: relative;
+  color: #888;
+  font-size: 0.85em;
 }
 
-.date-divider:before,
-.date-divider:after {
-  content: "";
-  flex: 1;
-  border-bottom: 1px solid #dee2e6;
-  margin: auto 10px;
-}
-
+/* Стили для одного сообщения */
 .message-item {
   display: flex;
   margin-bottom: 15px;
-  position: relative;
+  max-width: 75%; /* Сообщения не должны быть слишком широкими */
+  align-items: flex-end; /* Выравнивание аватара и облачка сообщения по низу */
 }
 
 .message-item.own {
-  flex-direction: row-reverse;
+  align-self: flex-end;
+  flex-direction: row-reverse; /* Аватар справа для своих сообщений */
 }
 
-.message-item.own .message-content {
-  margin-left: auto;
-}
-
-.avatar img {
+.avatar {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  margin-right: 12px;
+  overflow: hidden;
+  margin: 0 10px;
+  flex-shrink: 0;
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .message-content {
-  max-width: 75%;
-  min-width: 200px;
-  position: relative;
+  background-color: #ffffff;
+  padding: 10px 15px;
+  border-radius: 18px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  position: relative; /* Для "хвостика" */
 }
+
+.message-item.own .message-content {
+  background-color: #e0f0ff; /* Светло-голубой для своих сообщений */
+}
+
+/* "Хвостики" для сообщений (псевдоэлементы) */
+.message-content::before {
+  content: '';
+  position: absolute;
+  bottom: 5px;
+  width: 0;
+  height: 0;
+  border: 8px solid transparent;
+}
+
+.message-item:not(.own) .message-content::before {
+  left: -10px; /* Хвостик слева */
+  border-right-color: #ffffff;
+
+}
+
+.message-item.own .message-content::before {
+  right: -10px; /* Хвостик справа */
+  border-left-color: #e0f0ff;
+}
+
 
 .message-header {
   display: flex;
+  justify-content: space-between;
   align-items: center;
   margin-bottom: 5px;
 }
 
 .sender-name {
   font-weight: 600;
-  margin-right: 8px;
+  font-size: 0.9em;
+  color: #333;
+}
+
+.message-item.own .sender-name {
+  /* Можно скрыть свое имя, если не нужно */
+  /* display: none; */
 }
 
 .message-time {
-  color: #6c757d;
-  font-size: 0.8em;
+  font-size: 0.75em;
+  color: #777;
 }
 
 .edited-mark {
-  color: #6c757d;
-  font-size: 0.8em;
+  font-size: 0.7em;
+  color: #aaa;
   margin-left: 5px;
 }
 
 .message-body {
-  background: #fff;
-  border-radius: 12px;
-  padding: 12px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-}
-
-.message-item.own .message-body {
-  background: #e3f2fd;
-}
-
-.text {
-  margin: 0;
-  color: #212529;
+  font-size: 0.95em;
   line-height: 1.5;
+  color: #2c3e50;
 }
 
-.attachments {
-  margin-top: 10px;
+.message-body .text {
+  white-space: pre-wrap; /* Сохраняем переносы строк */
+  word-wrap: break-word; /* Перенос длинных слов */
 }
 
-.attachment-item {
-  display: flex;
-  align-items: center;
-  margin: 8px 0;
-  padding: 8px;
-  background: #f8f9fa;
-  border-radius: 8px;
-}
-
-.attachment-preview {
-  width: 40px;
-  height: 40px;
-  margin-right: 10px;
-  flex-shrink: 0;
-}
-
-.attachment-thumb {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 4px;
-}
-
-.file-icon {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  opacity: 0.7;
-}
-
-.attachment-name {
-  color: #212529;
-  text-decoration: none;
+.deleted-message {
+  font-style: italic;
+  color: #aaa;
   font-size: 0.9em;
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.attachment-name:hover {
-  text-decoration: underline;
-}
-
+/* Действия с сообщением (появляются при наведении) */
 .message-actions {
-  position: absolute;
-  top: -10px;
-  display: flex;
-  gap: 3px;
   opacity: 0;
-  transition: opacity 0.2s;
-  background: white;
-  padding: 3px;
+  transition: opacity 0.2s ease-in-out;
+  margin-left: 5px; /* Небольшой отступ от контента сообщения */
+  position: absolute; /* Позиционируем относительно .message-content или .message-item */
+  right: 10px;
+  bottom: -10px; /* Немного ниже сообщения */
+  background: #fff;
   border-radius: 15px;
+  padding: 2px 5px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  z-index: 1;
-}
-
-.message-item .message-actions {
-  right: -15px;
-}
-
-.message-item:not(.own) .message-actions {
-  left: -5px;
-  right: auto;
-}
-
-.message-item:not(.own) .message-actions {
-  flex-direction: row-reverse;
+  z-index: 10;
+  display: flex;
 }
 
 .message-item:hover .message-actions {
   opacity: 1;
 }
-
 .message-item.own .message-actions {
-  background: #e3f2fd;
-  box-shadow: 0 3px 3px rgba(0,0,0,0.1);
+    left: 10px;
+    right: auto;
 }
 
-/* Уменьшаем отступы для компактности */
+
 .message-actions button {
-  padding: 0;
-  line-height: 1;
-}
-
-/* Фикс выравнивания иконок */
-.message-actions button img {
-  vertical-align: middle;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 5px;
 }
 
 .action-icon {
   width: 16px;
   height: 16px;
-  padding: 4px;
-  transition: all 0.2s;
-  display: block;
+  opacity: 0.7;
 }
 
-.action-icon:hover {
+.message-actions button:hover .action-icon {
   opacity: 1;
 }
 
-.deleted-message {
-  color: #6c757d;
-  font-style: italic;
-}
 
+/* Область ввода сообщения */
 .chat-input-area {
-  padding: 15px;
-  border-top: 1px solid #dee2e6;
-  background: #fff;
-  box-sizing: border-box;
-}
-
-.replying-to {
-  background: #f8f9fa;
-  padding: 8px;
-  border-radius: 6px;
-  margin-bottom: 10px;
-}
-
-.selected-files {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.file-item {
-  background: #f8f9fa;
-  padding: 6px 12px;
-  border-radius: 20px;
+  padding: 15px 20px;
+  background-color: #ffffff;
+  border-top: 1px solid #e0e0e0;
   display: flex;
   align-items: center;
-  font-size: 0.9em;
 }
 
-.remove-file-btn {
-  margin-left: 8px;
-  color: #dc3545;
-  background: none;
-  border: none;
-}
-
-textarea {
-  width: calc(100% - 24px); /* Учитываем padding */
-  padding: 12px;
-  border: 1px solid #dee2e6;
-  border-radius: 8px;
+.chat-input-area textarea {
+  flex-grow: 1;
+  padding: 12px 15px;
+  border: 1px solid #dcdcdc;
+  border-radius: 20px; /* Более скругленное поле ввода */
   resize: none;
-  min-height: 80px;
-  margin: 0;
-  box-sizing: border-box;
+  font-size: 0.95em;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  min-height: 24px; /* Минимальная высота для одной строки */
+  max-height: 120px; /* Максимальная высота, чтобы не растягивалось слишком сильно */
+  line-height: 1.4;
+  overflow-y: auto; /* Позволяет прокрутку, если текста много */
+}
+
+.chat-input-area textarea:focus {
+  outline: none;
+  border-color: #5a9bd4;
+  box-shadow: 0 0 0 2px rgba(90, 155, 212, 0.2);
 }
 
 .input-actions {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-top: 10px;
+  margin-left: 10px;
 }
 
-.attach-btn {
+.input-actions .attach-btn,
+.input-actions button {
+  background: none;
+  border: none;
+  padding: 8px;
   cursor: pointer;
   display: flex;
   align-items: center;
+  justify-content: center;
+  border-radius: 50%; /* Круглые кнопки для иконок */
+  width: 40px;
+  height: 40px;
+  transition: background-color 0.2s ease;
 }
 
-button[type="submit"] {
-  background: linear-gradient(135deg, #007bff, #0056b3);
+.input-actions .attach-btn:hover,
+.input-actions button:hover {
+  background-color: #f0f0f0;
+}
+
+.input-actions .action-icon { /* Иконки в кнопках отправки/прикрепления */
+  width: 20px;
+  height: 20px;
+  opacity: 0.8;
+}
+
+/* Стили для кнопки отправки, когда она текстовая */
+.input-actions button[type="submit"] { /* Если кнопка все еще текстовая, а не иконка */
+  background-color: #5b9cff;
   color: white;
-  padding: 10px 25px;
-  border-radius: 25px;
-  border: none;
+  padding: 10px 18px;
+  border-radius: 20px;
   font-weight: 500;
+  margin-left: 8px;
+  width: auto; /* Автоматическая ширина для текстовых кнопок */
+  height: auto;
+}
+
+.input-actions button[type="submit"]:hover {
+  background-color: #4a8ae6;
+}
+
+.input-actions button[type="submit"]:disabled {
+  background-color: #a0c7ff;
+  cursor: not-allowed;
+}
+
+
+/* Уведомления об ответе/редактировании */
+.replying-to,
+.editing-notice {
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  background-color: #eef5ff;
+  border-left: 3px solid #5b9cff;
+  border-radius: 4px;
+  font-size: 0.85em;
+  color: #333;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.replying-to button,
+.editing-notice button {
+  background: none;
+  border: none;
+  color: #777;
+  font-size: 1.2em;
+  cursor: pointer;
+  padding: 0 5px;
+}
+
+/* Отображение выбранных файлов для прикрепления */
+.selected-files {
+  margin-bottom: 10px;
+  padding: 5px 0;
+}
+.file-item {
+  display: inline-flex; /* Чтобы элементы были в строку и можно было управлять отступами */
+  align-items: center;
+  background-color: #e9ecef;
+  padding: 5px 10px;
+  border-radius: 15px; /* Скругленные плашки для файлов */
+  font-size: 0.8em;
+  margin-right: 8px;
+  margin-bottom: 5px;
+}
+.file-name {
+  margin-right: 8px;
+  color: #495057;
+}
+.remove-file-btn {
+  background: none;
+  border: none;
+  color: #6c757d;
+  cursor: pointer;
+  font-size: 1em;
+  padding: 0;
+  line-height: 1;
+}
+.remove-file-btn:hover {
+  color: #343a40;
+}
+
+/* Стили для вложений в сообщениях */
+.attachments {
+  margin-top: 8px;
+}
+.attachment-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  transition: all 0.2s;
-  box-shadow: 0 3px 6px rgba(0,123,255,0.2);
-}
-
-button[type="submit"]:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 5px 10px rgba(0,123,255,0.3);
-}
-
-button[type="submit"]::after {
-  content: '➤';
-  font-size: 1.1em;
-}
-
-button:has(img[src="/icons/copy-icon.png"]) {
-  order: 1; /* Перемещаем в конец ряда */
-}
-
-.reply-preview {
-  border-left: 3px solid #4CAF50;
-  padding-left: 10px;
-  margin: 10px 0;
-  color: #6c757d;
-  font-size: 0.9em;
-}
-
-/* стили для индикатора */
-.ai-thinking {
-  text-align: center;
+  background-color: #f8f9fa;
   padding: 8px;
-  color: #555;
-  font-style: italic;
+  border-radius: 8px;
+  margin-bottom: 5px;
+  border: 1px solid #e9ecef;
+}
+.attachment-preview {
+  width: 40px;
+  height: 40px;
+  margin-right: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #e9ecef;
+  border-radius: 6px;
+  overflow: hidden; /* Обрезка превью, если оно больше контейнера */
+}
+.attachment-thumb {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: cover; /* Масштабирование с сохранением пропорций и заполнением */
+}
+.file-icon {
+  width: 24px; /* Размер иконки для обычных файлов */
+  height: 24px;
+}
+.attachment-name {
+  font-size: 0.85em;
+  color: #007bff;
+  text-decoration: none;
+}
+.attachment-name:hover {
+  text-decoration: underline;
 }
 
-.ai-spinner {
-  width: 20px;
-  vertical-align: middle;
-  margin-right: 6px;
+/* Адаптация для полосы прокрутки (Webkit) */
+.messages-list::-webkit-scrollbar {
+  width: 8px;
 }
+
+.messages-list::-webkit-scrollbar-track {
+  background: #f4f7f9; /* Фон трека совпадает с фоном чата */
+  border-radius: 4px;
+}
+
+.messages-list::-webkit-scrollbar-thumb {
+  background: #cdd3d9; /* Цвет ползунка */
+  border-radius: 4px;
+}
+
+.messages-list::-webkit-scrollbar-thumb:hover {
+  background: #b8bfc6; /* Цвет ползунка при наведении */
+}
+
 </style>

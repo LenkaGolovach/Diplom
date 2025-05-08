@@ -29,7 +29,12 @@ class CustomUserManager(BaseUserManager):
 class CustomUser(AbstractUser):
     username = None
     email = models.EmailField(_('email address'), unique=True)
-    avatar = models.ImageField(upload_to='avatars/', null=True, blank=True)  
+    avatar = models.ImageField(
+        upload_to='avatars/',
+        null=True,
+        blank=True,
+        validators=[FileExtensionValidator(allowed_extensions=['jpg', 'jpeg', 'png', 'gif', 'webp'])]
+    )  
 
     name = models.CharField(_('full name'), max_length=255, blank=True)
 
@@ -43,6 +48,12 @@ class CustomUser(AbstractUser):
 
     def get_full_name(self):
         return f"{self.first_name} {self.last_name}".strip() or self.email
+        
+    @property
+    def avatar_url(self):
+        if self.avatar:
+            return self.avatar.url
+        return None
 
 class Board(models.Model):
     name = models.CharField(max_length=255)

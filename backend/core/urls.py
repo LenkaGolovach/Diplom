@@ -19,11 +19,25 @@ from django.contrib import admin
 from django.conf import settings
 from django.conf.urls.static import static
 from django.views.generic import RedirectView  # Импортируем RedirectView
-
+from django.views.static import serve
+import re
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('api.urls')),
     path('', RedirectView.as_view(url='/api/')),  # Перенаправление на /api/
 ]
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+# Добавляем обработку статических файлов и медиа
+urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+
+# Обрабатываем медиа файлы специальным образом для режима разработки
+if settings.DEBUG:
+    urlpatterns += [
+        path('media/<path:path>', serve, {
+            'document_root': settings.MEDIA_ROOT,
+            'show_indexes': True,
+        }),
+    ]
+else:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -3,7 +3,7 @@ import axios from 'axios'
 
 // Helper function to get base URL for assets
 const getBaseUrl = () => {
-  return process.env.VUE_APP_API_URL || '';
+  return process.env.VUE_APP_API_URL || 'http://localhost:8000';
 };
 
 // Helper function to format avatar URL
@@ -12,6 +12,12 @@ const formatAvatarUrl = (avatar) => {
   
   // Check if the avatar is already a full URL
   if (avatar.startsWith('http')) return avatar;
+
+  // Handle relative URLs from backend
+  if (avatar.startsWith('/media/')) {
+    const baseUrl = getBaseUrl().replace(/\/+$/, '');
+    return `${baseUrl}${avatar}`;
+  }
 
   const baseUrl = getBaseUrl().replace(/\/+$/, '');
   const avatarPath = avatar.replace(/^\/+/, '');
@@ -38,10 +44,23 @@ export default createStore({
         return;
       }
       
+      // Используем avatar_url из API если доступен, иначе форматируем avatar
+      let avatar_url;
+      
+      if (user.avatar_url) {
+        avatar_url = user.avatar_url;
+      } else if (user.avatar) {
+        avatar_url = formatAvatarUrl(user.avatar);
+      } else {
+        avatar_url = 'https://www.gravatar.com/avatar/?d=identicon';
+      }
+      
       state.user = {
         ...user,
-        avatar_url: formatAvatarUrl(user.avatar)
+        avatar_url
       };
+      
+      console.log("User updated in store with avatar:", state.user.avatar_url);
     },
     setToken(state, token) {
       state.token = token;
@@ -110,36 +129,44 @@ export default createStore({
           }
         });
 
-        const userData = {
-          ...response.data,
-          avatar_url: formatAvatarUrl(response.data.avatar)
-        };
+        console.log("Fetched user data:", response.data);
 
         commit('setUser', response.data);
+        return response.data;
       } catch (error) {
         console.error('Ошибка загрузки пользователя:', error);
         // If unauthorized, logout
         if (error.response && error.response.status === 401) {
           commit('logout');
         }
+        throw error;
       }
     },
     async updateUser({ commit, state }, userData) {
       try {
+        console.log("Updating user with data:", userData);
         let contentType = 'application/json';
         let finalData = userData;
         
         // Check if userData is FormData object (for file uploads)
         if (userData instanceof FormData) {
           contentType = 'multipart/form-data';
+          console.log("Using FormData for update");
+          
+          // Для диагностики выведем все поля FormData
+          for(let pair of userData.entries()) {
+            console.log(pair[0] + ': ' + (pair[1] instanceof File ? `File: ${pair[1].name}` : pair[1]));
+          }
         } else {
           // Convert regular object to FormData to handle both text fields and files
+          console.log("Converting object to FormData");
           const formData = new FormData();
           
           // Add all properties from userData to formData
           for (const key in userData) {
             if (userData.hasOwnProperty(key)) {
               formData.append(key, userData[key]);
+              console.log(`Adding to FormData: ${key}`);
             }
           }
           
@@ -153,10 +180,15 @@ export default createStore({
           }
         });
         
+        console.log("User update response:", response.data);
         commit('setUser', response.data);
         return response.data;
       } catch (error) {
-        console.error('Error updating user:', error.response ? error.response.data : error);
+        console.error('Error updating user:', error);
+        if (error.response) {
+            console.error('Response status:', error.response.status);
+            console.error('Response data:', error.response.data);
+        }
         throw error;
       }
     }
