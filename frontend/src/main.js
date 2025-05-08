@@ -3,9 +3,25 @@ import App from './App.vue'
 import router from './router'
 import store from './store' 
 import axios from 'axios'
-import '@fortawesome/fontawesome-free/css/all.css';
+// import '@fortawesome/fontawesome-free/css/all.css'; // Удаляем, так как переходим на SVG для иконки поиска
+
+/* import the fontawesome core */
+// import { library } from '@fortawesome/fontawesome-svg-core'
+
+/* import specific icons */
+// import { faSearch, faUser, faTasks, faComments, faSignOutAlt, faPlus, faEdit, faTrash, faCopy, faReply, faPaperclip, faThList, faUserCircle, faProjectDiagram, faChevronDown, faChevronUp, faFileAlt, faCog, faQuestionCircle } from '@fortawesome/free-solid-svg-icons'
+
+/* import font awesome icon component */
+// import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
+
+/* add icons to the library */
+// library.add(faSearch, faUser, faTasks, faComments, faSignOutAlt, faPlus, faEdit, faTrash, faCopy, faReply, faPaperclip, faThList, faUserCircle, faProjectDiagram, faChevronDown, faChevronUp, faFileAlt, faCog, faQuestionCircle)
 
 const app = createApp(App)
+
+/* add font awesome icon component */
+// app.component('font-awesome-icon', FontAwesomeIcon)
+
 app.use(router)
 app.use(store) 
 

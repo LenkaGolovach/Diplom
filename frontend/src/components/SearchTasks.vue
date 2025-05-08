@@ -1,13 +1,19 @@
 <template>
   <div class="search-tasks">
     <div class="search-container">
-      <input
-        v-model="searchQuery"
-        type="text"
-        placeholder="Поиск задач..."
-        class="search-input"
-        @input="debouncedSearch"
-      />
+      <div class="search-input-wrapper">
+        <svg class="svg-search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="Поиск задач..."
+          class="search-input"
+          @input="debouncedSearch"
+        />
+      </div>
       <div class="filters">
         <select v-model="selectedBoard" class="filter-select">
           <option value="">Все доски</option>
@@ -15,11 +21,12 @@
             {{ board.name }}
           </option>
         </select>
-        <select v-model="selectedColumn" class="filter-select">
+        <select v-model="selectedColumnName" class="filter-select">
           <option value="">Все колонки</option>
-          <option v-for="column in columns" :key="column.id" :value="column.id">
-            {{ column.name }}
-          </option>
+          <option value="Нужно сделать">Нужно сделать</option>
+          <option value="В процессе">В процессе</option>
+          <option value="Готово">Готово</option>
+          <option value="__other__">Другие</option>
         </select>
         <select v-model="selectedPriority" class="filter-select">
           <option value="">Все приоритеты</option>
@@ -31,16 +38,19 @@
           <input
             type="date"
             v-model="createdAfter"
-            placeholder="Создано после"
+            placeholder="Создано с..."
             class="date-input"
+            title="Создано с"
           />
           <input
             type="date"
             v-model="createdBefore"
-            placeholder="Создано до"
+            placeholder="Создано по..."
             class="date-input"
+            title="Создано по"
           />
         </div>
+        <button @click="clearFilters" class="clear-filters-button">Очистить фильтры</button>
       </div>
     </div>
     <div class="search-results" v-if="tasks.length > 0">
@@ -71,7 +81,7 @@
 </template>
 
 <script>
-import { ref, computed, watch } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { useStore } from 'vuex'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
@@ -84,19 +94,13 @@ export default {
     const router = useRouter()
     const searchQuery = ref('')
     const selectedBoard = ref('')
-    const selectedColumn = ref('')
+    const selectedColumnName = ref('')
     const selectedPriority = ref('')
     const createdAfter = ref('')
     const createdBefore = ref('')
     const tasks = ref([])
     const boards = ref([])
     const columns = ref([])
-
-    // Вычисляемое свойство для фильтрации колонок по выбранной доске
-    const filteredColumns = computed(() => {
-      if (!selectedBoard.value) return columns.value
-      return columns.value.filter(column => column.board === selectedBoard.value)
-    })
 
     const getPriorityClass = (priority) => {
       const classes = {
@@ -178,11 +182,19 @@ export default {
         const params = {
           search: searchQuery.value,
           board: selectedBoard.value,
-          column: selectedColumn.value,
+          column_name: selectedColumnName.value,
           priority: selectedPriority.value,
           created_after: createdAfter.value,
           created_before: createdBefore.value
         }
+
+        Object.keys(params).forEach(key => {
+          if (params[key] === null || params[key] === '') {
+            delete params[key];
+          }
+        });
+
+        console.log("Search Params:", params);
 
         const token = localStorage.getItem('token')
         const response = await axios.get('/api/tasks/', { 
@@ -204,35 +216,48 @@ export default {
 
     const debouncedSearch = debounce(searchTasks, 300)
 
+    const clearFilters = () => {
+      searchQuery.value = ''
+      selectedBoard.value = ''
+      selectedColumnName.value = ''
+      selectedPriority.value = ''
+      createdAfter.value = ''
+      createdBefore.value = ''
+    }
+
     watch(selectedBoard, (newBoard) => {
-      selectedColumn.value = ''
+      selectedColumnName.value = ''
       searchTasks()
     })
 
-    watch([selectedColumn, selectedPriority, createdAfter, createdBefore], () => {
+    watch([selectedColumnName, selectedPriority, createdAfter, createdBefore], () => {
       searchTasks()
     })
 
-    loadBoards()
-    loadColumns()
+    onMounted(async () => {
+      await loadBoards();
+      await loadColumns();
+      await searchTasks();
+    });
 
     return {
       searchQuery,
       selectedBoard,
-      selectedColumn,
+      selectedColumnName,
       selectedPriority,
       createdAfter,
       createdBefore,
       tasks,
       boards,
-      columns: filteredColumns,
+      columns,
       getColumnName,
       getBoardName,
       formatDate,
       debouncedSearch,
       goToTask,
       getPriorityClass,
-      getPriorityText
+      getPriorityText,
+      clearFilters
     }
   }
 }
@@ -240,44 +265,83 @@ export default {
 
 <style scoped>
 .search-tasks {
-  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 25px; /* Пространство между блоком фильтров и результатами */
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  padding: 10px; /* Небольшой внутренний отступ для всего компонента */
 }
 
 .search-container {
-  margin-bottom: 20px;
+  background-color: #fff;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.07);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.search-input-wrapper {
+  position: relative;
+}
+
+.svg-search-icon {
+  position: absolute;
+  left: 12px; /* Отступ слева для иконки */
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px; /* Размер иконки */
+  height: 16px;
+  color: #909399; /* Цвет иконки */
+  stroke-width: 2.5; /* Толщина линий для этого SVG */
 }
 
 .search-input {
   width: 100%;
-  padding: 10px;
-  font-size: 16px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  margin-bottom: 10px;
+  padding: 12px 15px 12px 40px; /* Отступ слева для иконки */
+  border: 1px solid #dcdfe6;
+  border-radius: 8px;
+  font-size: 1rem;
+  color: #303133;
+  box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #409eff;
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
 }
 
 .filters {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 15px;
+  align-items: center;
 }
 
-.filter-select {
-  padding: 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  min-width: 150px;
+.filter-select, .date-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #dcdfe6;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  color: #606266;
+  background-color: #fff;
+  box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  height: 40px; /* Фиксированная высота для единообразия */
+}
+
+.filter-select:focus, .date-input:focus {
+  outline: none;
+  border-color: #409eff;
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
 }
 
 .date-filters {
-  display: flex;
-  gap: 10px;
-}
-
-.date-input {
-  padding: 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  display: contents; /* Позволяет инпутам даты быть частью грида */
 }
 
 .search-results {
@@ -287,17 +351,17 @@ export default {
 }
 
 .task-card {
+  background-color: #fff;
+  border-radius: 8px;
   padding: 15px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  background-color: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .task-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-3px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .task-header {
@@ -309,49 +373,90 @@ export default {
 
 .task-header h3 {
   margin: 0;
-  flex: 1;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2c3e50;
+  word-break: break-word;
 }
 
 .priority-label {
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 0.8em;
-  font-weight: bold;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
   margin-left: 10px;
+  flex-shrink: 0;
+  color: #fff;
 }
 
-.priority-high {
-  background-color: #ffebee;
-  color: #d32f2f;
-  border: 1px solid #ffcdd2;
-}
+.priority-high { background-color: #f56c6c; }
+.priority-medium { background-color: #e6a23c; }
+.priority-low { background-color: #67c23a; }
 
-.priority-medium {
-  background-color: #fff3e0;
-  color: #f57c00;
-  border: 1px solid #ffe0b2;
-}
-
-.priority-low {
-  background-color: #e8f5e9;
-  color: #388e3c;
-  border: 1px solid #c8e6c9;
+.task-card p {
+  font-size: 0.9rem;
+  color: #5a6370;
+  margin-bottom: 12px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2; /* Ограничение в 2 строки для описания */
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-height: 2.7em; /* Примерная высота для двух строк */
 }
 
 .task-meta {
-  margin-top: 10px;
-  font-size: 0.9em;
-  color: #666;
+  font-size: 0.8rem;
+  color: #8892a0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .task-meta span {
   display: block;
-  margin-bottom: 5px;
 }
 
 .no-results {
   text-align: center;
-  padding: 20px;
-  color: #666;
+  padding: 30px;
+  font-size: 1.1rem;
+  color: #8892a0;
+  background-color: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.clear-filters-button {
+  padding: 10px 15px;
+  border: 1px solid #dcdfe6;
+  background-color: #f5f7fa;
+  color: #606266;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+  text-align: center;
+  white-space: nowrap;
+  height: 40px;
+  box-sizing: border-box;
+}
+
+.clear-filters-button:hover {
+  background-color: #e4e7ed;
+  border-color: #c0c4cc;
+  color: #303133;
+}
+
+.clear-filters-button:focus {
+    outline: none;
+    border-color: #409eff;
+    box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
+}
+
+.date-input {
+  color-scheme: light;
 }
 </style> 
