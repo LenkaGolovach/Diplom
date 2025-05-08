@@ -1,5 +1,5 @@
 import eventlet
-eventlet.monkey_patch()
+eventlet.monkey_patch(os=False, subprocess=False)
 
 import os
 from celery import Celery

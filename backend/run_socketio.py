@@ -3,7 +3,7 @@
 # 1) Монки-патчим перед любого рода асинхронщиной
 import eventlet
 # Изменяем monkey_patch, чтобы не затрагивать модуль os
-eventlet.monkey_patch(os=False)  # нужно для eventlet + KombuManager, os=False для Windows file I/O
+eventlet.monkey_patch(os=False, subprocess=False)  # нужно для eventlet + KombuManager, os=False для Windows file I/O
 
 import os, sys
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
