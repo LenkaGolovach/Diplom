@@ -13,6 +13,7 @@ from .views import (
     TaskMemberViewSet,
     MessageViewSet,
     NeuroChatViewSet,
+    NeuroSessionView,
     ReportsView
 )
 from rest_framework_simplejwt.views import (
@@ -35,13 +36,14 @@ urlpatterns = [
     path('auth/login/', LoginView.as_view(), name='login'),
     path('auth/register/', RegisterView.as_view(), name='register'),
     path('tasks/', TaskViewSet.as_view({'get': 'list', 'post': 'create'})),
-    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('tasks/<int:pk>/', TaskViewSet.as_view({'get': 'retrieve', 'put': 'update', 'patch': 'partial_update', 'delete': 'destroy'})),
-    path('api/boards/check_invite/', BoardViewSet.as_view({'get': 'check_invite'})),
-    path('api/boards/join/', BoardViewSet.as_view({'post': 'join'})),
-    path('', include(router.urls)),
+    path('boards/check_invite/', BoardViewSet.as_view({'get': 'check_invite'})),
+    path('boards/join/', BoardViewSet.as_view({'post': 'join'})),
+    path('neuro-chat/session/', NeuroSessionView.as_view(), name='neuro-session'),
     path('reports/', ReportsView.as_view(), name='reports'),
+    path('', include(router.urls)),
 ]
 
 # Добавляем URL для загрузки файлов

@@ -387,7 +387,7 @@ class MessageSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'text', 'sender', 
             'reply_to', 'reply_to_id', 
-            'attachments', 'created_at',
+            'attachments', 'created_at', 'session',
             'is_deleted', 'is_edited', 'edited_at'
         ]
         read_only_fields = ['id', 'created_at', 'sender', 'task']

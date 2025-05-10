@@ -9,7 +9,7 @@
 3. Установите [RabbitMQ](https://www.rabbitmq.com/docs/download).
 4. Установите необходимую модель нейросети и запустите ollama
 ```bash
-ollama pull mistral
+ollama pull llava:7b
 ollama serve
 ```
 
@@ -88,6 +88,8 @@ cd frontend
 ```bash
 npm install
 npm install xlsx
+npm install --save markdown-it
+
 ```
 
 ### Запустите сервер разработки:

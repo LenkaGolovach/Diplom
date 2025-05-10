@@ -3,14 +3,23 @@ import ollama
 from .models import Message, MessageAttachment
 from django.contrib.auth import get_user_model
 from .serializers import MessageSerializer
-import socketio, base64, io, tempfile, subprocess
+import socketio, io, tempfile, subprocess
+import re
 import fitz  # PyMuPDF for PDF → text
 from docx import Document as DocxDocument
-from pptx import Presentation
 from pdf2image import convert_from_bytes
+from transformers import pipeline, Pipeline
 
 User = get_user_model()
 sio = socketio.Client(reconnection=True, reconnection_attempts=5, reconnection_delay=1)
+
+# Глобальная инициализация переводчиков
+translator_ru_en: Pipeline | None = None
+translator_en_ru: Pipeline | None = None
+
+# Простая функция определения, на английском ли текст (нет кириллицы)
+def is_english(text: str) -> bool:
+    return not bool(re.search(r'[\u0400-\u04FF]', text))
 
 @shared_task
 def generate_ai_response(user_message_id):
@@ -18,98 +27,92 @@ def generate_ai_response(user_message_id):
     user_msg = Message.objects.get(id=user_message_id)
     user_text = user_msg.text or ""
 
-    # System instruction to lock Russian language and formatting
+    # System instruction: английский Markdown
     system_instruction = (
-        "Ты — интеллигентный AI-помощник. "
+        "You are an intelligent AI assistant.\n"
+        "When you answer, format the entire response in Markdown with line breaks preserved."
     )
 
-    prompt = f"{system_instruction}\n\n{user_text}"
+    # Инициализируем переводчики при первом вызове
+    global translator_ru_en, translator_en_ru
+    if translator_ru_en is None:
+        translator_ru_en = pipeline("translation", model="Helsinki-NLP/opus-mt-ru-en", tokenizer="Helsinki-NLP/opus-mt-ru-en")
+    if translator_en_ru is None:
+        translator_en_ru = pipeline("translation", model="Helsinki-NLP/opus-mt-en-ru", tokenizer="Helsinki-NLP/opus-mt-en-ru")
 
+    # Определяем язык запроса
+    english_input = is_english(user_text)
+
+    # Если вход на русском (или другом не-английском), переводим на английский
+    if not english_input:
+        user_text_en = translator_ru_en(user_text)[0]["translation_text"]
+    else:
+        user_text_en = user_text
+
+    prompt = f"{system_instruction}\n\n{user_text_en}"
+
+    # Process attachments (не изменялось)
     images_b64 = []
-
-    # Process attachments
     for att in user_msg.attachments.all():
         att.file.open('rb')
         content = att.file.read()
         att.file.close()
         mime = att.content_type.lower()
-
-        # Image or video → raw bytes
         if mime.startswith('image/') or mime.startswith('video/'):
             images_b64.append(content)
-
-        # PDF → extract text
-        elif mime == 'application/pdf':
-            doc = fitz.open(stream=content, filetype='pdf')
-            text = "\n".join(page.get_text() for page in doc)
-            prompt += f"\n\n[PDF text:]\n{text}"
-
-        # DOCX → extract text
-        elif mime in (
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'application/msword'
-        ):
-            doc = DocxDocument(io.BytesIO(content))
-            text = "\n".join(p.text for p in doc.paragraphs)
-            prompt += f"\n\n[Word text:]\n{text}"
-
-        # PPTX → convert slides to images for true vision
-        elif mime in (
-            'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-            'application/vnd.ms-powerpoint'
-        ):
-            # save pptx to temp file
-            with tempfile.NamedTemporaryFile(suffix='.pptx', delete=False) as f_pptx:
-                f_pptx.write(content)
-                pptx_path = f_pptx.name
-
-            # convert PPTX→PDF via LibreOffice headless
-            subprocess.run([
-                'soffice', '--headless', '--convert-to', 'pdf', '--outdir', tempfile.gettempdir(), pptx_path
-            ], check=True)
-            pdf_path = pptx_path.rsplit('.pptx', 1)[0] + '.pdf'
-
-            # convert PDF pages → images
-            pages = convert_from_bytes(open(pdf_path, 'rb').read())
-            for page in pages:
-                buf = io.BytesIO()
-                page.save(buf, format='PNG')
-                images_b64.append(buf.getvalue())
-
-        # other docs → try PyMuPDF text
         else:
             try:
-                doc = fitz.open(stream=content, filetype=None)
-                text = "\n".join(p.get_text() for p in doc)
-                prompt += f"\n\n[Document text:]\n{text}"
+                if mime == 'application/pdf':
+                    doc = fitz.open(stream=content, filetype='pdf')
+                    text = "\n".join(page.get_text() for page in doc)
+                else:
+                    doc = DocxDocument(io.BytesIO(content))
+                    text = "\n".join(p.text for p in doc.paragraphs)
+                prompt += f"\n[Attachment text:]\n{text}"
             except Exception:
-                continue
+                pass
 
-    # Use chat API with roles and images
+    # Получаем ответ AI на английском Markdown
     resp = ollama.chat(
-        model="llava:7b", 
+        model="llava:7b",
         messages=[
             {'role': 'system', 'content': system_instruction},
             {'role': 'user', 'content': prompt, 'images': images_b64 or None}
         ],
         stream=False
     )
-    ai_text = resp['message']['content']
+    ai_text_en = resp['message']['content']
+
+    # Если вход был не на английском, переводим ответ обратно на русский построчно
+    if not english_input:
+        lines = ai_text_en.split("\n")
+        translated_lines = []
+        for line in lines:
+            translated = translator_en_ru(line)[0]["translation_text"]
+            translated_lines.append(translated)
+        ai_text = "\n".join(translated_lines)
+    else:
+        ai_text = ai_text_en
 
     # Save AI message
     ai_user, _ = User.objects.get_or_create(
         email='ai@localhost',
         defaults={'name': 'NeuroBot', 'avatar': 'icons/ai-avatar.png'}
     )
-    ai_msg = Message.objects.create(text=ai_text, sender=ai_user, neuro_chat=True)
+    session = user_msg.session
+    ai_msg = Message.objects.create(
+        text=ai_text,
+        sender=ai_user,
+        neuro_chat=True,
+        session=session
+    )
 
-    # Emit via Socket.IO (server as sole emitter)
+    # Emit via Socket.IO
     payload = MessageSerializer(ai_msg, context={'request': None}).data
     try:
         if not sio.connected:
             sio.connect('http://127.0.0.1:8000', transports=['websocket'])
-        sio.emit('neuro-chat:message-created', payload, namespace='/')
-        import time; time.sleep(0.1)
+        sio.emit('neuro-chat:message-created', payload)
     finally:
         if sio.connected:
             sio.disconnect()

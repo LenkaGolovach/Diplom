@@ -29,11 +29,11 @@
                 <span class="reply-sender">
                   @{{ message.reply_to.sender.name || message.reply_to.sender.email }}:
                 </span>
-                <span class="reply-text">
-                  {{ message.reply_to.text || 'вложение' }}
-                </span>
+                <div class="reply-text" v-html="renderMarkdown(message.reply_to.text)"></div>
               </div>
-              <p class="text" v-if="message.text">{{ message.text }}</p>
+
+              <div class="text" v-if="message.text" v-html="renderMarkdown(message.text)"></div>
+
               <div class="attachments" v-if="message.attachments.length">
                 <div v-for="(file, idx) in message.attachments" :key="idx" class="attachment-item">
                   <div class="attachment-preview">
@@ -55,8 +55,11 @@
               <button @click="deleteMessage(message)" v-if="message.sender.id === current.id">
                 <img src="/icons/delete-icon.png" class="action-icon">
               </button>
-              <button @click="copyMessage(message)">
+              <button @click="copyMessage($event,message)">
                 <img src="/icons/copy-icon.png" class="action-icon">
+              </button>
+              <button @click="forwardToNeuro(message)">
+                <img src="/icons/ai-avatar.png" class="action-icon" alt="Forward to AI">
               </button>
             </div>
           </div>
@@ -64,10 +67,9 @@
       </template>
     </div>
 
-
     <div class="chat-input-area">
       <div v-if="replyTo" class="replying-to">
-        Ответ на: <strong>{{ replyTo.text }}</strong>
+        Ответ на: <strong v-html="renderMarkdown(replyTo.text)"></strong>
         <button @click="cancelReply">×</button>
       </div>
 
@@ -107,6 +109,8 @@
 import axios from 'axios'
 import { io } from 'socket.io-client'
 import { mapState } from 'vuex'
+import MarkdownIt from 'markdown-it'
+import he from 'he'
 
 export default {
   name: 'DiscussionChat',
@@ -134,26 +138,17 @@ export default {
   },
 
   computed: {
-    ...mapState(['user']),  
-
+    ...mapState(['user']),
     current() {
       const cu = this.currentUser || {}
       const storeUser = this.user || {}
       return (cu.id != null) ? cu : storeUser
     },
-
-    // Always render internalMessages, which we initialize from props or load
-    allMessages() {
-      return this.internalMessages
-    },
-
-    isMessageValid() {
-      return (this.newMessage && this.newMessage.trim()) || this.attachments.length
-    },
-
+    allMessages() { return this.internalMessages },
+    isMessageValid() { return (this.newMessage && this.newMessage.trim()) || this.attachments.length },
     groupedMessages() {
       const groups = {}
-      this.allMessages.forEach(msg => {  
+      this.allMessages.forEach(msg => {
         const date = new Date(msg.created_at).toISOString().split('T')[0]
         if (!groups[date]) groups[date] = []
         groups[date].push(msg)
@@ -162,49 +157,34 @@ export default {
     }
   },
 
-  methods: {
-    formatTime(ts) {
-      return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    },
+  created() {
+    this.md = new MarkdownIt({ html: false, linkify: true, typographer: true, breaks: true })
+  },
 
+  methods: {
+    decodeHtml(str) { return str ? he.decode(str) : '' },
+    renderMarkdown(text) {
+      const decoded = this.decodeHtml(text)
+      return this.md.render(decoded)
+    },
+    formatTime(ts) { return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) },
     formatDateDivider(dateStr) {
       const date = new Date(dateStr)
-      return new Intl.DateTimeFormat('ru-RU', {
-        day: 'numeric', month: 'long', year: 'numeric', weekday: 'short'
-      }).format(date).replace(/,/g, '')
+      return new Intl.DateTimeFormat('ru-RU',{ day:'numeric',month:'long',year:'numeric',weekday:'short' }).format(date).replace(/,/g,'')
     },
-
     isImage(type) { return type && type.startsWith('image/') },
     isVideo(type) { return type && type.startsWith('video/') },
-
-    startReply(message) {
-      this.replyTo = { id: message.id, text: message.text || 'вложение', sender: message.sender }
-      this.$nextTick(() => this.$refs.input.focus())
-    },
-
+    startReply(message) { this.replyTo = { id: message.id, text: message.text||'', sender: message.sender }; this.$nextTick(()=>this.$refs.input.focus()) },
     cancelReply() { this.replyTo = null },
     handleAttachment(e) { this.attachments.push(...Array.from(e.target.files)) },
-    removeAttachment(i) { this.attachments.splice(i, 1) },
+    removeAttachment(i) { this.attachments.splice(i,1) },
 
     async loadMessages() {
       if (this.fetchMessages) {
-        try {
-          await this.fetchMessages()
-        } catch (err) {
-          console.warn('DiscussionChat: не смогли fetchMessages()', err)
-        }
-        // Sync fetched prop messages into internalMessages
-        if (Array.isArray(this.messages)) {
-          this.internalMessages = [...this.messages]
-        }
-      } else if (this.taskId != null) {
-        const { data } = await axios.get(
-          `/api/tasks/${this.taskId}/messages/`,
-          {
-            params: { expand: 'reply_to.sender,attachments' },
-            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-          }
-        )
+        await this.fetchMessages().catch(e=>console.warn(e))
+        if (Array.isArray(this.messages)) this.internalMessages = this.messages
+      } else if (this.taskId!=null) {
+        const { data } = await axios.get(`/api/tasks/${this.taskId}/messages/`,{ params:{ expand:'reply_to.sender,attachments'}, headers:{ Authorization:`Bearer ${localStorage.getItem('token')}` } })
         this.internalMessages = data
       }
     },
@@ -213,180 +193,93 @@ export default {
       const form = new FormData()
       if (this.newMessage.trim()) form.append('text', this.newMessage)
       if (this.replyTo) form.append('reply_to_id', this.replyTo.id)
-      this.attachments.forEach(f => form.append('attachments', f))
+      this.attachments.forEach(f=>form.append('attachments',f))
 
       if (this.editingMessage) {
-        // PATCH-запрос
-        const updated = this.sendMessage
-          ? await this.sendMessage(this.editingMessage.id, form)
-          : (await axios.patch(
-              `/api/tasks/${this.taskId}/messages/${this.editingMessage.id}/`, // Исправлено
-              form,
-              { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
-            )).data
-
-        const idx = this.internalMessages.findIndex(m => m.id === this.editingMessage.id)
-        if (idx !== -1) {
-          this.internalMessages.splice(idx, 1, updated)
-        }
-        this.editingMessage = null
+        const updated = this.sendMessage ? await this.sendMessage(this.editingMessage.id, form) : (await axios.patch(`/api/tasks/${this.taskId}/messages/${this.editingMessage.id}/`, form, { headers:{ Authorization:`Bearer ${localStorage.getItem('token')}` } })).data
+        const idx = this.internalMessages.findIndex(m=>m.id===this.editingMessage.id)
+        if (idx!==-1) this.internalMessages.splice(idx,1,updated)
+        this.editingMessage=null
       } else {
-        // Optimistic UI
-        const tmpId = Date.now()
-        const tmp = {
-          id: tmpId,
-          text: this.newMessage,
-          sender: this.current,
-          created_at: new Date().toISOString(),
-          attachments: []
-        }
-        this.internalMessages.push(tmp)
-        this.scrollToBottom()
-
+        const tmpId=Date.now(), tmp={id:tmpId,text:this.newMessage,sender:this.current,created_at:new Date().toISOString(),attachments:[]}
+        this.internalMessages.push(tmp); this.scrollToBottom()
         try {
-          const response = this.sendMessage
-            ? await this.sendMessage(null, form)
-            : await axios.post(
-                `/api/tasks/${this.taskId}/messages/`, // Исправлено
-                form,
-                { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }} // Исправлено
-              )
-          const real = response.data || response
-          const i = this.internalMessages.findIndex(m => m.id === tmpId)
-          if (i !== -1) {
-            this.internalMessages.splice(i, 1, real)
-          }
-          const channel = this.socketQuery.neuroChat ? 'neuro-chat' : 'task'
-          this.socket.emit(`${channel}:message-created`, real)
-        } catch (e) {
-          this.internalMessages = this.internalMessages.filter(m => m.id !== tmpId)
-          throw e
+          const response = this.sendMessage ? await this.sendMessage(null,form) : await axios.post(`/api/tasks/${this.taskId}/messages/`, form, { headers:{ Authorization:`Bearer ${localStorage.getItem('token')}` } })
+          const real = response.data||response; const i=this.internalMessages.findIndex(m=>m.id===tmpId); if(i!==-1) this.internalMessages.splice(i,1,real)
+          const channel=this.socketQuery.neuroChat?'neuro-chat':'task'; this.socket.emit(`${channel}:message-created`, real)
+        } catch(e){ this.internalMessages=this.internalMessages.filter(m=>m.id!==tmpId); throw e }
+      }
+      this.newMessage=''; this.attachments=[]; this.replyTo=null
+    },
+
+    cancelEdit() { this.editingMessage=null },
+    async deleteMessage(msg) {
+      if(!confirm('Удалить сообщение?'))return; this.internalMessages=this.internalMessages.filter(m=>m.id!==msg.id)
+      if(this.sendMessage) await this.sendMessage(msg.id,null,'delete')
+      else await axios.delete(`/api/tasks/${this.taskId}/messages/${msg.id}/`,{ headers:{ Authorization:`Bearer ${localStorage.getItem('token')}` } })
+    },
+    copyMessage(event, message) {
+      // находим ближайший .message-item от кнопки
+      const btn = event.currentTarget;
+      const item = btn.closest('.message-item');
+      if (!item) {
+        // fallback — просто текст из модели
+        return navigator.clipboard.writeText(message.text || '');
+      }
+      // внутри него ищем отрендеренный блок .text
+      const textEl = item.querySelector('.text');
+      const toCopy = textEl
+        ? textEl.innerText.trim()
+        : (message.text || '');
+
+      navigator.clipboard.writeText(toCopy);
+    },
+    async forwardToNeuro(message) {
+      // Сброс предыдущего состояния
+      this.replyTo = { id: message.id, text: message.text || '', sender: message.sender }
+      this.attachments = []
+
+      // Подтянуть каждое вложение по URL и превратить в File
+      for (const att of message.attachments) {
+        try {
+          const res = await fetch(att.url)
+          const blob = await res.blob()
+          const file = new File([blob], att.name, { type: att.type })
+          this.attachments.push(file)
+        } catch (err) {
+          console.warn('Не удалось загрузить вложение для пересылки', att.url, err)
         }
       }
 
-      this.newMessage = ''
-      this.attachments = []
-      this.replyTo = null
+      // Префилдим новое сообщение подсказкой (по желанию)
+      this.newMessage = 'Пожалуйста, сделай краткое содержание…';
+      // запомним в сторе
+      this.$store.commit('neuro/setForwarded', {
+        text:   this.newMessage,
+        replyTo: this.replyTo,
+        attachments: this.attachments
+      });
+      // перейдём в нейрочат
+      this.$router.push({ name:'NeuroChat' });
     },
-
-    cancelEdit() { this.editingMessage = null },
-
-    async deleteMessage(msg) {
-      if (!confirm('Удалить сообщение?')) return
-
-      this.internalMessages = this.internalMessages.filter(m => m.id !== msg.id)
-
-      if (this.sendMessage) {
-        await this.sendMessage(msg.id, null, 'delete')
-      } else {
-        await axios.delete(
-          `/api/tasks/${this.taskId}/messages/${msg.id}/`, // Исправлено
-          { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }} // Исправлено
-        )
-      }
-    },
-
-    copyMessage(msg) { navigator.clipboard.writeText(msg.text) },
-    
-    editMessage(msg) {
-      if (msg.is_deleted) return
-      this.editingMessage = msg
-      this.newMessage = msg.text || ''
-      this.replyTo = msg.reply_to ? { ...msg.reply_to } : null
-      this.attachments = msg.attachments.length ? [...msg.attachments] : []
-      this.$refs.input.focus()
-    },
-
-    scrollToBottom() {
-      this.$nextTick(() => {
-        const el = this.$el.querySelector('.messages-list')
-        el.scrollTop = el.scrollHeight
-      })
-    },
+    editMessage(msg){if(msg.is_deleted)return; this.editingMessage=msg; this.newMessage=msg.text||''; this.replyTo=msg.reply_to?{...msg.reply_to}:null; this.attachments=msg.attachments.length?[...msg.attachments]:[]; this.$refs.input.focus()},
+    scrollToBottom(){this.$nextTick(()=>{const el=this.$el.querySelector('.messages-list'); el.scrollTop=el.scrollHeight})}
   },
 
   mounted() {
-    this.socket = io('http://localhost:8000', {
-      path: '/socket.io',
-      transports: ['websocket'],
-      query: this.socketQuery
-    })
-
-    if (this.socketQuery && this.socketQuery.neuroChat) {
-      this.socket.on('neuro-chat:message-created', (msg) => {
-        console.log('Got AI message', msg)
-        if (msg && msg.id) {
-          const exists = this.internalMessages.some(m => m.id === msg.id)
-          if (!exists) {
-            msg.sender = {
-              ...msg.sender,
-              name: 'Нейрочат',
-              avatar: this.iconPath
-            }
-            this.internalMessages.push(msg)
-            this.scrollToBottom()
-          }
-        }
-      })
-    }
-
-    this.socket.on('connect', () => {
-      console.log('Socket connected, sid =', this.socket.id)
-    })
-
-    const channel = this.socketQuery && this.socketQuery.neuroChat ? 'neuro-chat' : 'task'
-
-    this.socket.on(channel + ':message-created', msg => {
-      if (msg && msg.id && this.internalMessages) {
-        let exists = false
-        for (let i = 0; i < this.internalMessages.length; i++) {
-          if (this.internalMessages[i].id === msg.id) {
-            exists = true
-            break
-          }
-        }
-        if (!exists) {
-          if (msg.sender && msg.sender.email === 'ai@localhost') {
-            msg.sender.name = 'Нейрочат'
-            msg.sender.avatar = this.iconPath
-          }
-          this.internalMessages.push(msg)
-          this.scrollToBottom()
-        }
-      }
-    })
-
-    this.socket.on(channel + ':message-updated', upd => {
-      if (upd && upd.id && this.internalMessages) {
-        for (let i = 0; i < this.internalMessages.length; i++) {
-          if (this.internalMessages[i].id === upd.id) {
-            this.$set(this.internalMessages, i, upd)
-            break
-          }
-        }
-      }
-    })
-
-    this.socket.on(channel + ':message-deleted', d => {
-      if (d && d.id && this.internalMessages) {
-        this.internalMessages = this.internalMessages.filter(function(m) {
-          return m.id !== d.id
-        })
-      }
-    })
-
-    this.loadMessages().then(() => {
-      this.scrollToBottom()
-    })
+    this.socket = io('http://localhost:8000',{ path:'/socket.io', transports:['websocket'], query:this.socketQuery })
+    if(this.socketQuery&&this.socketQuery.neuroChat) this.socket.on('neuro-chat:message-created',msg=>{ if(msg&&msg.id&&!this.internalMessages.some(m=>m.id===msg.id)){ msg.sender={...msg.sender,name:'Нейрочат',avatar:this.iconPath}; this.internalMessages.push(msg); this.scrollToBottom() }} )
+    this.socket.on('connect',()=>console.log('Socket connected, sid =',this.socket.id))
+    const channel=this.socketQuery&&this.socketQuery.neuroChat?'neuro-chat':'task'
+    this.socket.on(channel+':message-created',msg=>{ if(msg&&msg.id&&this.internalMessages){ if(!this.internalMessages.some(m=>m.id===msg.id)){ if(msg.sender&&msg.sender.email==='ai@localhost'){ msg.sender.name='Нейрочат'; msg.sender.avatar=this.iconPath } this.internalMessages.push(msg); this.scrollToBottom() } }} )
+    this.socket.on(channel+':message-updated',upd=>{ if(upd&&upd.id&&this.internalMessages){ const idx=this.internalMessages.findIndex(m=>m.id===upd.id); if(idx!==-1) this.$set(this.internalMessages, idx, upd) }} )
+    this.socket.on(channel+':message-deleted',d=>{ if(d&&d.id&&this.internalMessages) this.internalMessages=this.internalMessages.filter(m=>m.id!==d.id) })
+    this.loadMessages().then(()=>this.scrollToBottom())
   },
 
-  beforeUnmount() {
-    if (this.socket) this.socket.disconnect()
-  }
+  beforeUnmount(){ if(this.socket) this.socket.disconnect() }
 }
 </script>
-
-
 
 <style scoped>
 /* Общие стили чата */

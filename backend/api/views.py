@@ -28,7 +28,7 @@ from rest_framework import serializers
 # импорт моделей
 from .models import (
     Board, Column, Task, CustomUser, FileAttachment, 
-    BoardMember, TaskMember, Message, MessageAttachment
+    BoardMember, TaskMember, Message, MessageAttachment, NeuroSession
 )
 
 # импорт сериализаторов
@@ -434,7 +434,14 @@ class NeuroChatViewSet(mixins.ListModelMixin,
     serializer_class = MessageSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        # только сессии текущего пользователя
+        session, _ = NeuroSession.objects.get_or_create(owner=self.request.user)
+        return Message.objects.filter(neuro_chat=True, session=session).order_by('created_at')
+
     def perform_create(self, serializer):
+        session, _ = NeuroSession.objects.get_or_create(owner=self.request.user)
+        serializer.save(neuro_chat=True, session=session, sender=self.request.user)
         msg = serializer.save(sender=self.request.user, neuro_chat=True)
         payload = MessageSerializer(msg, context={'request': self.request}).data
         # эмитим событие нейрочата сразу :contentReference[oaicite:13]{index=13}
@@ -444,6 +451,14 @@ class NeuroChatViewSet(mixins.ListModelMixin,
         eventlet.sleep(0)
         sio.disconnect()
         generate_ai_response.delay(msg.id)
+
+class NeuroSessionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        session, _ = NeuroSession.objects.get_or_create(owner=request.user)
+        return Response({"session_id": session.id})
+
 class ReportsView(APIView):
     permission_classes = [IsAuthenticated]
     

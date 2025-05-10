@@ -1,5 +1,6 @@
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
+from django.conf import settings
 from django.utils.translation import gettext_lazy as _
 import uuid
 from django.core.validators import FileExtensionValidator
@@ -149,6 +150,10 @@ class FileAttachment(models.Model):
     def __str__(self):
         return self.name
 
+class NeuroSession(models.Model):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
 class Message(models.Model):
     id = models.BigAutoField(primary_key=True, editable=False)  # Явное определение
     task = models.ForeignKey(
@@ -169,6 +174,7 @@ class Message(models.Model):
         default=False,
         help_text="Отметка, что сообщение относится к нейрочату"
     )
+    session = models.ForeignKey(NeuroSession, null=True, on_delete=models.CASCADE)
 
     class Meta:
         ordering = ['created_at']

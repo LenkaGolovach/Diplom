@@ -32,7 +32,16 @@ application = socketio.WSGIApp(sio, django_app)
 # --- Обработчики подключений ---
 @sio.event
 def connect(sid, environ):
+    # достаём query‑строку, ищем session=<id>
+    qs = environ.get('QUERY_STRING','')
+    params = dict(pair.split('=') for pair in qs.split('&') if '=' in pair)
+    session = params.get('session')
+    if session:
+        room = f'neuro-{session}'
+        sio.enter_room(sid, room)
+        print(f"SID {sid} joined room {room}")
     print(f"Client connected: {sid}")
+
 
 @sio.event
 def disconnect(sid):
@@ -41,8 +50,12 @@ def disconnect(sid):
 # --- Relay для нейрочата (оставляем ваш) ---
 @sio.on('neuro-chat:message-created')
 def handle_neuro_message_created(sid, data):
-    print(f"[NeuroChat] Broadcasting message ID {data.get('id')}")
-    sio.emit('neuro-chat:message-created', data, skip_sid=sid) 
+    print("RELAY got data:", data)
+    session = data.get('session')
+    print(" -> session in payload:", session)
+    room = f'neuro-{session}'
+    print(f" -> emitting to room {room}")
+    sio.emit('neuro-chat:message-created', data, room=room)
 
 # --- NEW: Relay для задач ---
 @sio.on('task:message-created')
