@@ -112,7 +112,8 @@ def generate_ai_response(user_message_id):
     try:
         if not sio.connected:
             sio.connect('http://127.0.0.1:8000', transports=['websocket'])
-        sio.emit('neuro-chat:message-created', payload)
+        room = f'neuro-{ai_msg.session.id}'
+        sio.emit('neuro-chat:message-created', payload, room=room)
     finally:
         if sio.connected:
             sio.disconnect()

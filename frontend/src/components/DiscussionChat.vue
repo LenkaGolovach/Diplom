@@ -268,7 +268,6 @@ export default {
 
   mounted() {
     this.socket = io('http://localhost:8000',{ path:'/socket.io', transports:['websocket'], query:this.socketQuery })
-    if(this.socketQuery&&this.socketQuery.neuroChat) this.socket.on('neuro-chat:message-created',msg=>{ if(msg&&msg.id&&!this.internalMessages.some(m=>m.id===msg.id)){ msg.sender={...msg.sender,name:'Нейрочат',avatar:this.iconPath}; this.internalMessages.push(msg); this.scrollToBottom() }} )
     this.socket.on('connect',()=>console.log('Socket connected, sid =',this.socket.id))
     const channel=this.socketQuery&&this.socketQuery.neuroChat?'neuro-chat':'task'
     this.socket.on(channel+':message-created',msg=>{ if(msg&&msg.id&&this.internalMessages){ if(!this.internalMessages.some(m=>m.id===msg.id)){ if(msg.sender&&msg.sender.email==='ai@localhost'){ msg.sender.name='Нейрочат'; msg.sender.avatar=this.iconPath } this.internalMessages.push(msg); this.scrollToBottom() } }} )

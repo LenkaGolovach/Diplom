@@ -441,7 +441,6 @@ class NeuroChatViewSet(mixins.ListModelMixin,
 
     def perform_create(self, serializer):
         session, _ = NeuroSession.objects.get_or_create(owner=self.request.user)
-        serializer.save(neuro_chat=True, session=session, sender=self.request.user)
         msg = serializer.save(sender=self.request.user, neuro_chat=True)
         payload = MessageSerializer(msg, context={'request': self.request}).data
         # эмитим событие нейрочата сразу :contentReference[oaicite:13]{index=13}
