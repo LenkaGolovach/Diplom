@@ -98,8 +98,13 @@ def generate_ai_response(user_message_id):
 
         if not english_input:
             lines = ai_text_en.split("\n")
-            translated_lines = [translator_en_ru(line)[0]["translation_text"] for line in lines if line.strip()]
+            translated_lines = []
+            for line in lines:
+                # translate every line, even if it’s just pipes and dashes
+                translated = translator_en_ru(line)[0]["translation_text"] if not is_english(line) else line
+                translated_lines.append(translated)
             ai_text = "\n".join(translated_lines)
+
         else:
             ai_text = ai_text_en
 

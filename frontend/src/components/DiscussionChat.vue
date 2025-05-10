@@ -26,11 +26,15 @@
 
             <div class="message-body" v-if="!message.is_deleted">
               <div class="reply-preview" v-if="message.reply_to">
-                <span class="reply-sender">
-                  @{{ message.reply_to.sender.name || message.reply_to.sender.email }}:
-                </span>
-                <div class="reply-text" v-html="renderMarkdown(message.reply_to.text)"></div>
+                <div class="reply-quote-bar"></div>
+                <div class="reply-body">
+                  <span class="reply-sender">
+                    @{{ message.reply_to.sender.name || message.reply_to.sender.email }}
+                  </span>
+                  <div class="reply-text" v-html="renderMarkdown(message.reply_to.text)"></div>
+                </div>
               </div>
+
 
               <div class="text" v-if="message.text" v-html="renderMarkdown(message.text)"></div>
 
@@ -65,6 +69,11 @@
           </div>
         </div>
       </template>
+    </div>
+
+    <div v-if="aiThinking" class="ai-thinking">
+      <img src="/icons/ai-spinner.png" alt="AI Thinking" class="spinner-icon" />
+      <span class="thinking-text">Нейрочат думает...</span>
     </div>
 
     <div class="chat-input-area">
@@ -295,6 +304,10 @@ export default {
 
     // Единый обработчик для создания сообщений
     this.socket.on(`${channel}:message-created`, (msg) => {
+      if (isNeuroChat && msg.sender && msg.sender.email === 'ai@localhost') {
+        msg.sender.name   = 'Нейрочат';
+        msg.sender.avatar = this.iconPath;
+      }
       console.log(`[DiscussionChat] Event "${channel}:message-created". Raw MSG:`, msg ? { ...msg } : msg);
 
       if (msg && msg.id && this.internalMessages) {
@@ -646,6 +659,42 @@ export default {
   box-sizing: border-box;
 }
 
+.reply-preview {
+  display: flex;
+  background-color: #f0f0f0;
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.reply-quote-bar {
+  width: 4px;
+  background-color: #5b9cff;  /* цвет «пимпочки» как в Telegram */
+  border-radius: 2px;
+  margin-right: 8px;
+}
+
+.reply-body {
+  flex: 1;
+}
+
+.reply-sender {
+  font-weight: 600;
+  font-size: 0.85em;
+  color: #0366d6;
+  margin-bottom: 2px;
+  display: block;
+}
+
+.reply-text {
+  font-size: 0.9em;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .replying-to .reply-to-label {
   margin-right: 8px;
   white-space: nowrap;
@@ -764,4 +813,30 @@ export default {
   background: #b8bfc6; /* Цвет ползунка при наведении */
 }
 
+.ai-thinking {
+  display: flex;
+  align-items: center;
+  padding: 8px;
+  background-color: transparent;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  margin-left: 12px;
+}
+
+.spinner-icon {
+  width: 24px;
+  height: 24px;
+  margin-right: 8px;
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.thinking-text {
+  font-style: italic;
+  color: #555;
+}
 </style>
