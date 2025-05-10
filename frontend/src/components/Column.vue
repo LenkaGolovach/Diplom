@@ -1,14 +1,20 @@
 <template>
-  <div class="column">
+  <div 
+    class="column"
+    :style="columnStyle"
+    @mousedown.left="startDrag"
+  >
     <div 
-      class="color-stripe"
+      class="color-stripe column-drag-handle"
       :style="{ backgroundColor: column.color }"
-    ></div>
-    <div class="column-header">
+      
+    >
+    </div>
+    <div class="column-header" >
       <div
         v-if="!isEditing"
         class="column-title"
-        @dblclick="startEditing"
+        @dblclick.prevent="startEditing"
       >
         {{ column.name }}
       </div>
@@ -19,8 +25,9 @@
         @blur="stopEditing"
         @keyup.enter="stopEditing"
         class="column-title-input"
+        @mousedown.stop
       />
-      <button @click="deleteColumn" class="delete-column-button">×</button>
+      <button @click.prevent.stop="deleteColumnHandler" class="delete-column-button" @mousedown.stop>×</button>
     </div>
     
     <draggable
@@ -28,13 +35,15 @@
       group="tasks"
       class="tasks"
       item-key="id"
+      handle=".task-drag-handle"
       @change="onTaskChange"
+      @mousedown.native.stop
     >
       <template #item="{ element }">
         <Task 
           :task="element" 
-          @click="openTaskModal(element)"
-          @delete="deleteTask(element)" 
+          @click="openTaskModalHandler(element)"
+          @delete.stop="deleteTaskHandler(element)"
         />
       </template>
     </draggable>
@@ -42,22 +51,23 @@
     <button 
       v-if="!showTaskForm" 
       class="add-task-button" 
-      @click="showTaskForm = true"
+      @click.prevent.stop="showTaskForm = true"
+      @mousedown.stop
     >
       + Добавить задачу
     </button>
     
-    <div v-if="showTaskForm" class="new-task-form">
+    <div v-if="showTaskForm" class="new-task-form" @mousedown.stop>
       <input 
         ref="newTaskInput"
         v-model="newTaskName"
         class="new-task-input"
         placeholder="Введите название задачи"
-        @keyup.enter="createTask"
+        @keyup.enter="createTaskHandler"
       />
       <div class="new-task-actions">
-        <button @click="createTask" class="save-task-button">Сохранить</button>
-        <button @click="cancelTaskCreation" class="cancel-task-button">Отмена</button>
+        <button @click.prevent.stop="createTaskHandler" class="save-task-button">Сохранить</button>
+        <button @click.prevent.stop="cancelTaskCreation" class="cancel-task-button">Отмена</button>
       </div>
     </div>
   </div>
@@ -87,9 +97,57 @@ export default {
       showTaskForm: false,
       newTaskName: '',
       newName: this.column.name,
+      dragging: false,
+      dragOffsetX: 0,
+      dragOffsetY: 0,
     };
   },
+  computed: {
+    columnStyle() {
+      return {
+        left: `${this.column.x || 0}px`,
+        top: `${this.column.y || 0}px`,
+        zIndex: this.column.zIndex || 0,
+        position: 'absolute',
+      };
+    }
+  },
   methods: {
+    startDrag(event) {
+      this.dragging = true;
+      this.dragOffsetX = event.clientX - this.column.x;
+      this.dragOffsetY = event.clientY - this.column.y;
+
+      this.$emit('bring-to-front', this.column.id);
+
+      document.addEventListener('mousemove', this.onDrag);
+      document.addEventListener('mouseup', this.stopDrag);
+    },
+    onDrag(event) {
+      if (!this.dragging) return;
+      
+      let newX = event.clientX - this.dragOffsetX;
+      let newY = event.clientY - this.dragOffsetY;
+
+      this.$el.style.left = `${newX}px`;
+      this.$el.style.top = `${newY}px`;
+    },
+    stopDrag() {
+      if (!this.dragging) return;
+      this.dragging = false;
+      document.removeEventListener('mousemove', this.onDrag);
+      document.removeEventListener('mouseup', this.stopDrag);
+
+      const finalX = parseInt(this.$el.style.left, 10);
+      const finalY = parseInt(this.$el.style.top, 10);
+
+      const updatedColumn = {
+        ...this.column,
+        x: finalX,
+        y: finalY,
+      };
+      this.$emit('save-column-position', updatedColumn);
+    },
     startEditing() {
       this.isEditing = true;
       this.$nextTick(() => {
@@ -98,41 +156,22 @@ export default {
     },
     stopEditing() {
       this.isEditing = false;
-      this.updateColumn();
+      this.updateColumnHandler();
     },
-    addTask() {
-      this.$emit('add-task');
+    updateColumnHandler() {
+      this.$emit('update-column', { ...this.column, name: this.newName });
     },
-    deleteColumn() {
+    deleteColumnHandler() {
       this.$emit('delete-column');
     },
-    async deleteTask(task) {
-      try {
-        await axios.delete(`/api/tasks/${task.id}/`, {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-          },
-        });
-        
-        // Удаляем задачу из локального состояния
-        const index = this.tasks.findIndex(t => t.id === task.id);
-        if (index !== -1) {
-          this.tasks.splice(index, 1);
-        }
-      } catch (error) {
-        console.error('Ошибка удаления:', error);
-      }
-    },
-    async onTaskChange(event) {
+    onTaskChange(event) {
       console.log('Draggable change event:', event);
       const movedTask = event.moved ? event.moved.element : null;
       const addedTask = event.added ? event.added.element : null;
       const removedTask = event.removed ? event.removed.element : null;
 
-      // Обновляем весь список задач для родителя, чтобы он обновил пропсы
       this.$emit('update-tasks', this.tasks); 
 
-      // Отправляем изменения порядка на сервер
       this.tasks.forEach((task, index) => {
          if (task.order !== index || (addedTask && task.id === addedTask.id)) { 
            this.updateTaskOrder(task, index);
@@ -140,22 +179,27 @@ export default {
       });
     },
     async updateTaskOrder(task, newOrder) {
+        console.log(`Updating task ${task.id} in column ${this.column.id} to order ${newOrder}. Task data:`, JSON.parse(JSON.stringify(task)));
         try {
             await axios.patch(`/api/tasks/${task.id}/`, {
+                name: task.name,
                 column: this.column.id,
                 order: newOrder
             }, {
                 headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
             });
-            task.order = newOrder; // Обновляем локально для консистентности
+            console.log(`Task ${task.id} successfully updated on server. New order: ${newOrder}, new column: ${this.column.id}`);
+            task.order = newOrder;
+            task.column = this.column.id;
         } catch (error) {
             console.error(`Ошибка обновления порядка для задачи ${task.id}:`, error);
-            // Возможно, стоит откатить изменение в UI или показать ошибку
+            if (error.response) {
+                console.error("Server response:", error.response.data);
+            }
         }
     },
-    createTask() {
+    createTaskHandler() {
       if (!this.newTaskName.trim()) {
-        // Если имя пустое, сфокусируемся на поле ввода
         this.$nextTick(() => {
           this.$refs.newTaskInput.focus();
         });
@@ -170,26 +214,21 @@ export default {
       this.newTaskName = '';
       this.showTaskForm = false;
     },
-    async updateColumn() {
-      try {
-        const response = await axios.patch(
-          `/api/columns/${this.column.id}/`,
-          { name: this.newName },
-          {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('token')}`,
-            },
-          }
-        );
-        this.column.name = this.newName;
-        this.$emit('update-column', { ...this.column, name: this.newName });
-        this.isEditing = false;
-      } catch (error) {
-        console.error('Ошибка обновления колонки:', error);
-      }
-    },
-    openTaskModal(task) {
+    openTaskModalHandler(task) {
       this.$emit('openTaskModal', task);
+    },
+    deleteTaskHandler(task) {
+      const index = this.tasks.findIndex(t => t.id === task.id);
+      if (index !== -1) {
+        axios.delete(`/api/tasks/${task.id}/`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        }).then(() => {
+          this.tasks.splice(index, 1);
+          this.$emit('update-tasks', this.tasks); 
+        }).catch(error => {
+          console.error('Ошибка удаления задачи:', error);
+        });
+      }
     },
   },
   watch: {
@@ -200,11 +239,17 @@ export default {
         });
       }
     },
+    'column.name'(newName) {
+        this.newName = newName;
+    },
     'column.tasks': {
       handler(newTasks) {
-        this.tasks = Array.isArray(newTasks) ? [...newTasks] : [];
+        if (JSON.stringify(this.tasks) !== JSON.stringify(newTasks)) {
+            this.tasks = Array.isArray(newTasks) ? [...newTasks] : [];
+        }
       },
-      deep: true
+      deep: true,
+      immediate: true
     }
   }
 };
@@ -221,6 +266,13 @@ export default {
   flex-direction: column;
   max-height: calc(100vh - 180px);
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+  cursor: grab;
+  user-select: none;
+}
+
+.column:active {
+  cursor: grabbing;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
 }
 
 .color-stripe {
