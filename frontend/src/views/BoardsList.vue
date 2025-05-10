@@ -172,7 +172,7 @@ export default {
   left: 0;
   right: 0;
   bottom: 0;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 body {
@@ -193,6 +193,8 @@ body {
   z-index: 1;
   max-width: 1200px;
   margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .header {

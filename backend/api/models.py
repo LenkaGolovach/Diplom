@@ -63,6 +63,7 @@ class Board(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     invite_token = models.UUIDField(null=True, blank=True, unique=True)
+    drawing_data = models.JSONField(null=True, blank=True)
 
     def __str__(self):
         return self.name
@@ -96,6 +97,10 @@ class Column(models.Model):
     board = models.ForeignKey(Board, related_name='columns', on_delete=models.CASCADE)
     name = models.CharField(max_length=255)
     color = models.CharField(max_length=7, default='#ffffff')
+    # Поля для свободного позиционирования и наложения
+    x_coord = models.IntegerField(null=True, blank=True, help_text="X координата на доске")
+    y_coord = models.IntegerField(null=True, blank=True, help_text="Y координата на доске")
+    z_index = models.IntegerField(default=0, help_text="Порядок наложения (чем больше, тем выше)")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

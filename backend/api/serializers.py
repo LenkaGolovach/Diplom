@@ -317,7 +317,7 @@ class ColumnSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Column
-        fields = ['id', 'name', 'color', 'board', 'tasks', 'created_at', 'updated_at']
+        fields = ['id', 'name', 'color', 'board', 'tasks', 'created_at', 'updated_at', 'x_coord', 'y_coord', 'z_index']
         read_only_fields = ['created_at', 'updated_at']
 
 class BoardMemberSerializer(serializers.ModelSerializer):

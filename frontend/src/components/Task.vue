@@ -1,7 +1,7 @@
 <template>
-  <div class="task" @click="$emit('click', task)">
+  <div class="task">
     <div class="task-content">
-      <div class="task-header">
+      <div class="task-header task-drag-handle">
         <span class="task-name">{{ task.name }}</span>
         <button @click.stop="$emit('delete', task)" class="delete-button">×</button>
       </div>
