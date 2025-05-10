@@ -69,8 +69,9 @@
 
     <div class="chat-input-area">
       <div v-if="replyTo" class="replying-to">
-        Ответ на: <strong v-html="renderMarkdown(replyTo.text)"></strong>
-        <button @click="cancelReply">×</button>
+        <span class="reply-to-label">Ответ на:</span>
+        <strong class="reply-to-text-preview" v-html="renderMarkdown(replyTo.text)"></strong>
+        <button @click="cancelReply" class="cancel-reply-button">×</button>
       </div>
 
       <div v-if="editingMessage" class="editing-notice">
@@ -85,21 +86,33 @@
         </div>
       </div>
 
-      <textarea
-        ref="input"
-        v-model="newMessage"
-        placeholder="Напишите сообщение..."
-        @keyup.enter.exact.prevent="onSendClick"
-      ></textarea>
+      <div class="main-input-controls">
+        <textarea
+          ref="input"
+          v-model="newMessage"
+          placeholder="Напишите сообщение..."
+          @keyup.enter.exact.prevent="onSendClick"
+        ></textarea>
 
-      <div class="input-actions">
-        <label class="attach-btn">
-          <img src="/icons/attach-icon.png" class="action-icon">
-          <input type="file" multiple @change="handleAttachment" hidden>
-        </label>
-        <button @click="onSendClick" :disabled="!isMessageValid">
-          {{ editingMessage ? 'Сохранить' : 'Отправить' }}
-        </button>
+        <div class="input-actions">
+          <label class="attach-btn action-button-wrapper">
+            <img src="/icons/attach-icon.png" class="action-icon" alt="Прикрепить">
+            <input type="file" multiple @change="handleAttachment" hidden>
+          </label>
+          <button
+            @click="onSendClick"
+            :disabled="!isMessageValid"
+            class="send-button action-button-wrapper"
+            :title="editingMessage ? 'Сохранить изменения' : 'Отправить сообщение'"
+          >
+            <svg v-if="!editingMessage" class="action-icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
+            </svg>
+            <svg v-else class="action-icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path>
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -267,14 +280,82 @@ export default {
   },
 
   mounted() {
-    this.socket = io('http://localhost:8000',{ path:'/socket.io', transports:['websocket'], query:this.socketQuery })
-    if(this.socketQuery&&this.socketQuery.neuroChat) this.socket.on('neuro-chat:message-created',msg=>{ if(msg&&msg.id&&!this.internalMessages.some(m=>m.id===msg.id)){ msg.sender={...msg.sender,name:'Нейрочат',avatar:this.iconPath}; this.internalMessages.push(msg); this.scrollToBottom() }} )
-    this.socket.on('connect',()=>console.log('Socket connected, sid =',this.socket.id))
-    const channel=this.socketQuery&&this.socketQuery.neuroChat?'neuro-chat':'task'
-    this.socket.on(channel+':message-created',msg=>{ if(msg&&msg.id&&this.internalMessages){ if(!this.internalMessages.some(m=>m.id===msg.id)){ if(msg.sender&&msg.sender.email==='ai@localhost'){ msg.sender.name='Нейрочат'; msg.sender.avatar=this.iconPath } this.internalMessages.push(msg); this.scrollToBottom() } }} )
-    this.socket.on(channel+':message-updated',upd=>{ if(upd&&upd.id&&this.internalMessages){ const idx=this.internalMessages.findIndex(m=>m.id===upd.id); if(idx!==-1) this.$set(this.internalMessages, idx, upd) }} )
-    this.socket.on(channel+':message-deleted',d=>{ if(d&&d.id&&this.internalMessages) this.internalMessages=this.internalMessages.filter(m=>m.id!==d.id) })
-    this.loadMessages().then(()=>this.scrollToBottom())
+    this.socket = io('http://localhost:8000', {
+      path: '/socket.io',
+      transports: ['websocket'],
+      query: this.socketQuery
+    });
+
+    const isNeuroChat = this.socketQuery && this.socketQuery.neuroChat;
+    const channel = isNeuroChat ? 'neuro-chat' : 'task';
+
+    this.socket.on('connect', () => {
+      console.log(`[DiscussionChat] Socket connected, SID: ${this.socket.id}, Channel: ${channel}`);
+    });
+
+    // Единый обработчик для создания сообщений
+    this.socket.on(`${channel}:message-created`, (msg) => {
+      console.log(`[DiscussionChat] Event "${channel}:message-created". Raw MSG:`, msg ? { ...msg } : msg);
+
+      if (msg && msg.id && this.internalMessages) {
+        if (!this.internalMessages.some(m => m.id === msg.id)) {
+          console.log(`[DiscussionChat] New message id ${msg.id}. Processing...`);
+
+          let finalMsg = { ...msg }; 
+
+          if (isNeuroChat && finalMsg.sender && finalMsg.sender.email === 'ai@localhost') {
+            console.log(`[DiscussionChat] AI message (id: ${finalMsg.id}) detected. Modifying sender info.`);
+            finalMsg.sender = {
+              ...(finalMsg.sender || {}), 
+              name: 'Нейрочат',        
+              avatar: this.iconPath      
+            };
+          }
+          
+          this.internalMessages.push(finalMsg);
+          console.log(`[DiscussionChat] Message id ${finalMsg.id} pushed to internalMessages. New length: ${this.internalMessages.length}`);
+          this.scrollToBottom();
+        } else {
+          console.log(`[DiscussionChat] Message id ${msg.id} already exists in internalMessages. Skipping.`);
+        }
+      } else {
+        let errorReason = '';
+        if (!msg) errorReason = 'Message object is null/undefined.';
+        else if (!msg.id) errorReason = `Message ID is missing (id: ${msg.id}).`;
+        else if (!this.internalMessages) errorReason = 'internalMessages is not available.';
+        console.log(`[DiscussionChat] Invalid message received or prerequisites not met for "${channel}:message-created". Reason: ${errorReason} Raw MSG:`, msg ? { ...msg } : msg);
+      }
+    });
+
+    this.socket.on(`${channel}:message-updated`, upd => {
+      console.log(`[DiscussionChat] Event "${channel}:message-updated". Raw UPD:`, upd ? { ...upd } : upd);
+      if (upd && upd.id && this.internalMessages) {
+        const idx = this.internalMessages.findIndex(m => m.id === upd.id);
+        if (idx !== -1) {
+          const updatedMessage = { ...this.internalMessages[idx], ...upd };
+           if (isNeuroChat && updatedMessage.sender && updatedMessage.sender.email === 'ai@localhost') {
+            updatedMessage.sender.name = 'Нейрочат';
+            updatedMessage.sender.avatar = this.iconPath;
+          }
+          this.$set(this.internalMessages, idx, updatedMessage);
+          console.log(`[DiscussionChat] Message id ${upd.id} updated at index ${idx}.`);
+        } else {
+          console.log(`[DiscussionChat] Message id ${upd.id} for update not found in internalMessages.`);
+        }
+      }
+    });
+
+    this.socket.on(`${channel}:message-deleted`, d => {
+      console.log(`[DiscussionChat] Event "${channel}:message-deleted". Raw D:`, d ? { ...d } : d);
+      if (d && d.id && this.internalMessages) {
+        this.internalMessages = this.internalMessages.filter(m => m.id !== d.id);
+        console.log(`[DiscussionChat] Message id ${d.id} deleted.`);
+      }
+    });
+
+    this.loadMessages().then(() => {
+      this.scrollToBottom();
+    });
   },
 
   beforeUnmount(){ if(this.socket) this.socket.disconnect() }
@@ -462,25 +543,33 @@ export default {
 
 /* Область ввода сообщения */
 .chat-input-area {
-  padding: 15px 20px;
+  padding: 10px 15px;
   background-color: #ffffff;
   border-top: 1px solid #e0e0e0;
   display: flex;
-  align-items: center;
+  flex-direction: column; 
+  gap: 10px; 
+}
+
+.main-input-controls {
+  display: flex;
+  align-items: flex-end; /* Выравниваем по нижнему краю textarea и кнопок */
+  width: 100%;
 }
 
 .chat-input-area textarea {
   flex-grow: 1;
-  padding: 12px 15px;
+  padding: 10px 15px; /* Немного уменьшил паддинг для лучшего вида с кнопками */
   border: 1px solid #dcdcdc;
-  border-radius: 20px; /* Более скругленное поле ввода */
+  border-radius: 20px;
   resize: none;
   font-size: 0.95em;
   font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
-  min-height: 24px; /* Минимальная высота для одной строки */
-  max-height: 120px; /* Максимальная высота, чтобы не растягивалось слишком сильно */
-  line-height: 1.4;
-  overflow-y: auto; /* Позволяет прокрутку, если текста много */
+  min-height: 22px; /* Соответствует line-height + padding */
+  line-height: 1.4; /* Базовая высота строки */
+  max-height: 120px; 
+  overflow-y: auto;
+  /* margin-right: 10px; - Удалено, теперь управление отступами через input-actions */
 }
 
 .chat-input-area textarea:focus {
@@ -491,55 +580,53 @@ export default {
 
 .input-actions {
   display: flex;
-  align-items: center;
-  margin-left: 10px;
+  align-items: center; /* Иконки выровнены по центру внутри своих кнопок */
+  margin-left: 10px; /* Отступ слева от textarea */
+  gap: 8px; /* Расстояние между кнопками "скрепка" и "отправить" */
 }
 
-.input-actions .attach-btn,
-.input-actions button {
+/* Общий стиль для оберток кнопок-иконок в области ввода */
+.action-button-wrapper {
   background: none;
   border: none;
-  padding: 8px;
+  padding: 0; /* Убираем внутренний padding, так как SVG будет центрироваться */
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%; /* Круглые кнопки для иконок */
-  width: 40px;
-  height: 40px;
+  border-radius: 50%; /* Круглая форма */
+  width: 40px;  /* Фиксированная ширина */
+  height: 40px; /* Фиксированная высота */
   transition: background-color 0.2s ease;
+  box-sizing: border-box;
 }
 
-.input-actions .attach-btn:hover,
-.input-actions button:hover {
-  background-color: #f0f0f0;
+.action-button-wrapper:hover {
+  background-color: #f0f0f0; /* Легкий фон при наведении */
 }
 
-.input-actions .action-icon { /* Иконки в кнопках отправки/прикрепления */
-  width: 20px;
-  height: 20px;
-  opacity: 0.8;
-}
-
-/* Стили для кнопки отправки, когда она текстовая */
-.input-actions button[type="submit"] { /* Если кнопка все еще текстовая, а не иконка */
-  background-color: #5b9cff;
-  color: white;
-  padding: 10px 18px;
-  border-radius: 20px;
-  font-weight: 500;
-  margin-left: 8px;
-  width: auto; /* Автоматическая ширина для текстовых кнопок */
-  height: auto;
-}
-
-.input-actions button[type="submit"]:hover {
-  background-color: #4a8ae6;
-}
-
-.input-actions button[type="submit"]:disabled {
-  background-color: #a0c7ff;
+.action-button-wrapper:disabled {
+  opacity: 0.5;
   cursor: not-allowed;
+  background-color: transparent; /* Убираем фон при наведении для неактивной кнопки */
+}
+
+/* Стиль для SVG и IMG иконок внутри кнопок */
+.action-button-wrapper .action-icon {
+  width: 20px; /* Размер иконки */
+  height: 20px;
+  fill: currentColor; /* Позволяет SVG наследовать цвет текста, если нужно */
+  color: #555; /* Основной цвет иконок, можно изменить */
+  opacity: 0.7; /* Начальная прозрачность, как было для img */
+}
+.action-button-wrapper:hover .action-icon {
+  opacity: 1;
+  color: #333; /* Цвет иконки при наведении */
+}
+.action-button-wrapper:disabled .action-icon,
+.action-button-wrapper:disabled:hover .action-icon {
+  opacity: 0.5;
+  color: #999; /* Цвет неактивной иконки */
 }
 
 
@@ -547,7 +634,6 @@ export default {
 .replying-to,
 .editing-notice {
   padding: 8px 12px;
-  margin-bottom: 10px;
   background-color: #eef5ff;
   border-left: 3px solid #5b9cff;
   border-radius: 4px;
@@ -556,22 +642,39 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  width: 100%; 
+  box-sizing: border-box;
 }
 
-.replying-to button,
-.editing-notice button {
+.replying-to .reply-to-label {
+  margin-right: 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.replying-to .reply-to-text-preview {
+  flex-grow: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 8px;
+}
+
+.replying-to .cancel-reply-button {
   background: none;
   border: none;
   color: #777;
   font-size: 1.2em;
   cursor: pointer;
   padding: 0 5px;
+  flex-shrink: 0;
 }
 
 /* Отображение выбранных файлов для прикрепления */
 .selected-files {
-  margin-bottom: 10px;
-  padding: 5px 0;
+  padding: 5px 0; 
+  width: 100%;
+  box-sizing: border-box;
 }
 .file-item {
   display: inline-flex; /* Чтобы элементы были в строку и можно было управлять отступами */

@@ -435,20 +435,62 @@ class NeuroChatViewSet(mixins.ListModelMixin,
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        # только сессии текущего пользователя
-        session, _ = NeuroSession.objects.get_or_create(owner=self.request.user)
-        return Message.objects.filter(neuro_chat=True, session=session).order_by('created_at')
+        # Пробуем получить session_id из query_params для GET запросов, если необходимо фильтровать по ID сессии
+        # Однако, для нейрочата обычно все сообщения пользователя в рамках его сессий.
+        # Если у пользователя может быть много сессий и нам нужна конкретная, это нужно будет доработать.
+        # Пока оставляем логику, которая получает все сообщения из всех сессий пользователя.
+        user_sessions = NeuroSession.objects.filter(owner=self.request.user)
+        return Message.objects.filter(neuro_chat=True, session__in=user_sessions).order_by('created_at')
 
     def perform_create(self, serializer):
-        session, _ = NeuroSession.objects.get_or_create(owner=self.request.user)
-        msg = serializer.save(sender=self.request.user, neuro_chat=True)
+        session_id_from_request = self.request.data.get('session_id')
+
+        if not session_id_from_request:
+            # Этого не должно происходить, если фронтенд всегда отправляет session_id
+            logger.error("NeuroChatViewSet: session_id not provided in request data.")
+            # Можно вернуть ошибку, но для совместимости или отладки пока создадим/получим сессию по пользователю
+            # Однако, строгая проверка была бы лучше:
+            # from rest_framework.exceptions import ValidationError
+            # raise ValidationError({"session_id": "This field is required."})
+            neuro_session, _ = NeuroSession.objects.get_or_create(owner=self.request.user)
+        else:
+            try:
+                # Важно проверить, что сессия принадлежит текущему пользователю
+                neuro_session = NeuroSession.objects.get(id=session_id_from_request, owner=self.request.user)
+            except NeuroSession.DoesNotExist:
+                logger.error(f"NeuroChatViewSet: NeuroSession with id {session_id_from_request} for user {self.request.user.id} not found.")
+                # Если сессия не найдена, или не принадлежит пользователю, создаем новую для этого пользователя.
+                # Альтернативно, можно вернуть ошибку 400/403.
+                # Для текущей логики фронтенда, где сессия создается на клиенте и передается,
+                # эта ситуация может означать рассинхрон или попытку доступа к чужой сессии.
+                # Пока что, для большей отказоустойчивости, если сессия из запроса невалидна,
+                # привяжем к сессии пользователя по умолчанию.
+                # Однако, лучше было бы возвращать ошибку, чтобы клиент мог обработать это состояние.
+                # from rest_framework.exceptions import PermissionDenied, NotFound
+                # raise NotFound({"detail": "Session not found or you do not have permission to access it."})
+                neuro_session, _ = NeuroSession.objects.get_or_create(owner=self.request.user) # Фолбэк
+            except ValueError: # Если session_id_from_request невалидный UUID/PK
+                logger.error(f"NeuroChatViewSet: Invalid session_id format: {session_id_from_request}")
+                neuro_session, _ = NeuroSession.objects.get_or_create(owner=self.request.user) # Фолбэк
+
+        # Сохраняем сообщение с указанием сессии
+        msg = serializer.save(sender=self.request.user, neuro_chat=True, session=neuro_session)
+        
         payload = MessageSerializer(msg, context={'request': self.request}).data
-        # эмитим событие нейрочата сразу :contentReference[oaicite:13]{index=13}
-        if not sio.connected:
-            sio.connect('http://127.0.0.1:8000')
-        sio.emit('neuro-chat:message-created', payload, namespace='/')
-        eventlet.sleep(0)
-        sio.disconnect()
+        
+        # Эмитим событие нейрочата
+        # Убедимся, что соединение устанавливается и закрывается правильно
+        sio_client = socketio.Client(reconnection=False) # Создаем новый экземпляр для этого запроса
+        try:
+            sio_client.connect('http://127.0.0.1:8000', transports=['websocket']) # Указываем transport явно
+            sio_client.emit('neuro-chat:message-created', payload) # Убрал namespace='/', т.к. по логам его нет
+            logger.info(f"Emitted neuro-chat:message-created for session {neuro_session.id if neuro_session else 'None'}")
+        except socketio.exceptions.ConnectionError as e:
+            logger.error(f"Socket.IO connection error: {e}")
+        finally:
+            if sio_client.connected:
+                sio_client.disconnect()
+        
         generate_ai_response.delay(msg.id)
 
 class NeuroSessionView(APIView):

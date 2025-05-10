@@ -113,6 +113,11 @@ export default {
             headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
           })
         } else {
+          // Добавляем session_id в FormData, если он есть
+          if (sessionId.value) {
+            form.append('session_id', sessionId.value);
+          }
+
           const { data } = await axios.post('/api/neuro-chat/', form, {
             headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
           })
