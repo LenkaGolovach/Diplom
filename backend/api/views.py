@@ -244,6 +244,11 @@ class TaskViewSet(viewsets.ModelViewSet):
         return super().update(request, *args, **kwargs)
 
 class TaskMemberViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet для управления участниками задачи.
+    - POST /api/tasks/{task_pk}/members/        — присоединиться (или назначить другого, если вы — владелец доски)
+    - DELETE /api/tasks/{task_pk}/members/{pk}/ — выйти из задачи (или удалить другого, если вы — владелец доски)
+    """
     serializer_class = TaskMemberSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -252,17 +257,37 @@ class TaskMemberViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         task = get_object_or_404(Task, id=self.kwargs['task_pk'])
-        member, created = TaskMember.objects.get_or_create(
-            task=task,
-            user=request.user
-        )
-        return Response(self.get_serializer(member).data, 
-            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+        board = task.column.board
+
+        # По умолчанию добавляем request.user
+        user = request.user
+
+        # Если указан user_id и текущий пользователь — владелец доски, позволяем назначить другого
+        uid = request.data.get('user_id')
+        if uid is not None:
+            if board.owner != request.user:
+                return Response({'detail': 'Только владелец доски может назначать других участников.'},
+                                status=status.HTTP_403_FORBIDDEN)
+            user = get_object_or_404(CustomUser, id=uid)
+
+        member, created = TaskMember.objects.get_or_create(task=task, user=user)
+        serializer = self.get_serializer(member)
+        return Response(serializer.data,
+                        status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
     def destroy(self, request, *args, **kwargs):
         task = get_object_or_404(Task, id=self.kwargs['task_pk'])
-        member = get_object_or_404(TaskMember, task=task, user=request.user)
-        member.delete()
+        board = task.column.board
+
+        # pk здесь — это либо TaskMember.id, либо вы можете настроить lookup_field='user_id'
+        tm = get_object_or_404(TaskMember, task=task, user_id=kwargs['pk'])
+
+        # Если это не вы сами и вы не владелец доски — запрещаем
+        if tm.user != request.user and board.owner != request.user:
+            return Response({'detail': 'Недостаточно прав для удаления этого участника.'},
+                            status=status.HTTP_403_FORBIDDEN)
+
+        tm.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 # Аутентификация

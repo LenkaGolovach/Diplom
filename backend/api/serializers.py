@@ -112,12 +112,13 @@ class FileAttachmentSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 class TaskMemberSerializer(serializers.ModelSerializer):
+    id     = serializers.IntegerField(source='user.id', read_only=True)
     email = serializers.EmailField(source='user.email')
     avatar = serializers.ImageField(source='user.avatar')
 
     class Meta:
         model = TaskMember
-        fields = ['email', 'avatar', 'joined_at']
+        fields = ['id', 'email', 'avatar', 'joined_at']
 
 class TaskSerializer(serializers.ModelSerializer):
     subtasks = SubTaskSerializer(many=True, required=False)
@@ -321,12 +322,13 @@ class ColumnSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at', 'updated_at']
 
 class BoardMemberSerializer(serializers.ModelSerializer):
+    user_id = serializers.IntegerField(source='user.id', read_only=True)
     email = serializers.EmailField(source='user.email')
     avatar = serializers.ImageField(source='user.avatar')
 
     class Meta:
         model = BoardMember
-        fields = ['email', 'avatar', 'role', 'joined_at']
+        fields = ['user_id','email','avatar','role','joined_at']
 
 class BoardSerializer(serializers.ModelSerializer):
     columns = ColumnSerializer(many=True, read_only=True)

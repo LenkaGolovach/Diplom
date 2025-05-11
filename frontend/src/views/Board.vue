@@ -60,6 +60,8 @@
     <TaskModal
       v-if="showModal"
       :task="currentTask"
+      :board="board"
+      :current-user="currentUser"
       @close="closeModal"
       @saveTask="saveTask"
     />

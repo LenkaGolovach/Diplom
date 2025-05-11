@@ -146,25 +146,58 @@
             <div class="participants-section">
               <label>Участники:</label>
               <div class="participants-list">
-                <div 
-                  v-for="member in localTask.members" 
-                  :key="member.email"
+                <div
+                  v-for="member in localTask.members"
+                  :key="member.id"
                   class="participant"
                 >
-                  <img 
-                    :src="member.avatar || '/default-avatar.png'" 
-                    class="avatar"
-                  >
+                  <img :src="member.avatar || '/default-avatar.png'" class="avatar">
                   <span>{{ member.email }}</span>
+                  <button
+                    v-if="isOwner"
+                    @click="removeTaskMember(member)"
+                    class="remove-member-btn"
+                  >×</button>
                 </div>
               </div>
+
+              <!-- Кнопка «Присоединиться/Отказаться» для самих участников -->
               <button 
+                v-if="!isOwner"
                 @click="toggleParticipation"
                 :class="['participation-btn', { 'joined': isParticipant }]"
                 :disabled="!localTask.id"
               >
                 {{ isParticipant ? 'Отказаться' : 'Присоединиться' }}
               </button>
+
+              <!-- Секция добавления новых участников (только для владельца доски) -->
+              <div v-if="isOwner" class="assign-participant">
+                <div class="custom-dropdown" @click="open = !open">
+                  <div class="selected">
+                    {{ newMemberId ? availableMembersMap[newMemberId].email : 'Выберите пользователя…' }}
+                    <span class="arrow" :class="{ open }">▾</span>
+                  </div>
+                  <ul v-if="open" class="dropdown-list">
+                    <li
+                      v-for="user in availableMembers"
+                      :key="user.user_id"
+                      @click="select(user.user_id)"
+                      class="dropdown-item"
+                    >
+                      <img :src="user.avatar" class="item-avatar">
+                      {{ user.email }}
+                    </li>
+                  </ul>
+                </div>
+                <button
+                  :disabled="newMemberId === null" 
+                  @click="assignTaskMember"
+                  class="assign-btn"
+                >
+                  Назначить участника
+                </button>
+              </div>
             </div>
           </div>
 
@@ -526,6 +559,8 @@ export default {
   },
   props: {
     task: Object,
+    board: Object, 
+    currentUser: Object,
   },
   data() {
     return {
@@ -563,6 +598,8 @@ export default {
       newSubtaskName: '',
       githubActiveTab: 'search',
       isSearching: false,
+      newMemberId: null,
+      open: false,
     };
   },
   computed: {
@@ -573,6 +610,20 @@ export default {
     },
     hasSubtasks() {
       return this.localTask.subtasks && this.localTask.subtasks.length > 0;
+    },
+    isOwner() {
+      return this.currentUser
+        && this.board
+        && this.board.owner
+        && this.board.owner.email === this.currentUser.email;
+    },
+    availableMembers() {
+      const boardList = this.board.members || []
+      const taskEmails = (this.localTask.members || []).map(m => m.email)
+      return boardList.filter(u => u.email && !taskEmails.includes(u.email))
+    },
+    availableMembersMap() {
+      return Object.fromEntries(this.availableMembers.map(u => [u.user_id, u]));
     },
   },
   watch: {
@@ -612,6 +663,10 @@ export default {
     }
   },
   methods: {
+    select(id) {
+      this.newMemberId = id;
+      this.open = false;
+    },
     startEditingTitle() {
       this.isEditingTitle = true;
       this.$nextTick(() => {
@@ -906,15 +961,21 @@ export default {
       if (!this.localTask.id) return;
 
       try {
-        const response = await axios.get(`/api/tasks/${this.localTask.id}/`, {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-          },
+        const { data } = await axios.get(`/api/tasks/${this.localTask.id}/`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
         });
         this.localTask = {
-          ...response.data,
-          // Map attachments to files to maintain consistency
-          files: response.data.attachments || []
+          id:          data.id,
+          name:        data.name,
+          description: data.description,
+          priority:    data.priority,
+          column:      data.column,
+          // **ВАЖНО**: переносим участников!
+          members:     data.members || [],
+          // остальные поля, которые вы используете:
+          subtasks:    data.subtasks || [],
+          // прикреплённые файлы
+          files:       data.attachments || []
         };
         
         // Обновляем высоту контейнера подзадач после загрузки данных
@@ -923,6 +984,35 @@ export default {
         });
       } catch (error) {
         console.error('Ошибка загрузки данных задачи:', error);
+      }
+    },
+    // Назначение участника через PATCH задачи
+    async assignTaskMember() {
+      if (this.newMemberId === null) return;
+      try {
+        await axios.post(
+          `/api/tasks/${this.localTask.id}/members/`,
+          { user_id: Number(this.newMemberId) },
+          { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+        )
+        await this.fetchTaskData()
+        this.newMemberId = null
+      } catch (e) {
+        console.error('Не удалось назначить участника:', e)
+        alert('Ошибка назначения участника')
+      }
+    },
+    // Удаление участника через PATCH задачи
+    async removeTaskMember(member) {
+      try {
+        await axios.delete(
+          `/api/tasks/${this.localTask.id}/members/${member.id}/`,
+          { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+        );
+        await this.fetchTaskData();
+      } catch (e) {
+        console.error('Не удалось удалить участника:', e.response || e);
+        alert('Ошибка удаления участника');
       }
     },
     async searchGitHubRepos() {
@@ -2890,4 +2980,119 @@ select.form-control {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
 }
+
+/* Контейнер для назначения участника */
+.assign-participant {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* Селектор выбора нового участника */
+.custom-dropdown {
+  position: relative;
+  width: 100%;
+  font-family: 'Segoe UI', sans-serif;
+}
+.custom-dropdown .selected {
+  padding: 10px 12px;
+  border: 1px solid #d1d5da;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
+  min-width: 180px;
+}
+.custom-dropdown .arrow {
+  transition: transform .2s;
+}
+.custom-dropdown .arrow.open {
+  transform: rotate(180deg);
+}
+.custom-dropdown .dropdown-list {
+  padding-left: 0;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #d1d5da;
+  border-radius: 8px;
+  padding: 4px 0;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  z-index: 10;
+  list-style: none;
+  margin: 0;
+}
+
+.custom-dropdown .dropdown-item {
+  padding: 8px 12px;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: background .2s;
+}
+.custom-dropdown .dropdown-item:hover {
+  background: rgba(91,156,255,0.1);
+}
+.custom-dropdown .item-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* Кнопка «Назначить участника» */
+.assign-btn {
+  padding: 10px 16px;
+  background: #5b9cff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 4px 15px rgba(91,156,255,0.3);
+}
+.assign-btn:hover:not(:disabled) {
+  background: #4a8bff;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(91,156,255,0.4);
+}
+.assign-btn:disabled {
+  background: #ccc;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* Кнопка удаления участника внутри .participant */
+.remove-member-btn {
+  background: none;
+  border: none;
+  color: #bdc3c7;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+  margin-left: 4px;
+}
+.remove-member-btn:hover {
+  background: rgba(231,76,60,0.1);
+  color: #e74c3c;
+  transform: rotate(90deg);
+}
+
 </style>
