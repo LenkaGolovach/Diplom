@@ -1,6 +1,7 @@
 import { createStore } from 'vuex'
 import axios from 'axios'
 import neuro from './neuro'
+import * as tasks from './tasks'
 
 // Helper function to get base URL for assets
 const getBaseUrl = () => {
@@ -36,6 +37,7 @@ if (token) {
 export default createStore({
   modules: {
     neuro,
+    tasks,
   },
   state: {
     user: null,

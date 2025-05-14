@@ -41,33 +41,56 @@
           <div v-if="activeTab === 'general'" class="tab-pane">
             <!-- Описание задачи -->
             <div class="form-group">
-              <label>Описание:</label>
+              <label class="description-label">
+                Описание:
+                <img
+                  src="/icons/edit-icon.png"
+                  alt="Редактировать"
+                  class="edit-icon"
+                  @click.stop="startEditingDescription"
+                />
+              </label>
+
+              <!-- Просмотр Markdown -->
+              <div
+                v-if="!isEditingDescription"
+                class="description-preview"
+                v-html="renderedDescription"
+                @dblclick="startEditingDescription"
+              ></div>
+
+              <!-- Режим редактирования -->
               <textarea
+                v-else
+                ref="descriptionTextarea"
                 v-model="localTask.description"
+                @blur="stopEditingDescription"
+                @keyup.ctrl.enter="stopEditingDescription"
                 placeholder="Введите описание задачи"
                 class="description-input"
               ></textarea>
             </div>
-      <!-- Приоритет задачи -->
-      <div class="form-group">
-        <label>Приоритет:</label>
-        <select
-          v-model="localTask.priority"
-          class="form-control"
-        >
-          <option value="high">Высокий</option>
-          <option value="medium">Средний</option>
-          <option value="low">Низкий</option>
-        </select>
-      </div>
 
-      <!-- Прогресс-бар (только если есть подзадачи) -->
-      <div v-if="hasSubtasks" class="progress-container">
-        <div class="progress-bar">
-          <div class="progress" :style="{ width: progress + '%' }"></div>
-        </div>
-        <div class="progress-text">{{ progress }}% выполнено</div>
-      </div>
+            <!-- Приоритет задачи -->
+            <div class="form-group">
+              <label>Приоритет:</label>
+              <select
+                v-model="localTask.priority"
+                class="form-control"
+              >
+                <option value="high">Высокий</option>
+                <option value="medium">Средний</option>
+                <option value="low">Низкий</option>
+              </select>
+            </div>
+
+            <!-- Прогресс-бар (только если есть подзадачи) -->
+            <div v-if="hasSubtasks" class="progress-container">
+              <div class="progress-bar">
+                <div class="progress" :style="{ width: progress + '%' }"></div>
+              </div>
+              <div class="progress-text">{{ progress }}% выполнено</div>
+            </div>
 
             <!-- Подзадачи -->
             <div class="subtask-add-form">
@@ -87,7 +110,7 @@
                 <input
                   type="checkbox"
                   v-model="subtask.completed"
-                  @change="updateProgress"
+                  @change="updateProgress(index)"
                 />
                 <div
                   class="subtask-title"
@@ -98,6 +121,7 @@
                   </template>
                   <input
                     v-else
+                    ref="subtaskInputs"
                     v-model="subtask.name"
                     @blur="stopEditingSubtask(index)"
                     @keyup.enter="stopEditingSubtask(index)"
@@ -152,7 +176,7 @@
                   class="participant"
                 >
                   <img :src="member.avatar || '/default-avatar.png'" class="avatar">
-                  <span>{{ member.email }}</span>
+                  <span>{{ displayName(member) }}</span>
                   <button
                     v-if="isOwner"
                     @click="removeTaskMember(member)"
@@ -163,7 +187,7 @@
 
               <!-- Кнопка «Присоединиться/Отказаться» для самих участников -->
               <button 
-                v-if="!isOwner"
+                v-if="localTask.id"
                 @click="toggleParticipation"
                 :class="['participation-btn', { 'joined': isParticipant }]"
                 :disabled="!localTask.id"
@@ -171,27 +195,33 @@
                 {{ isParticipant ? 'Отказаться' : 'Присоединиться' }}
               </button>
 
-              <!-- Секция добавления новых участников (только для владельца доски) -->
+              <!-- Секция добавления новых участников -->
               <div v-if="isOwner" class="assign-participant">
-                <div class="custom-dropdown" @click="open = !open">
-                  <div class="selected">
-                    {{ newMemberId ? availableMembersMap[newMemberId].email : 'Выберите пользователя…' }}
-                    <span class="arrow" :class="{ open }">▾</span>
+                <div class="custom-dropdown">
+                  <!-- Нажатие только на selected открывает/закрывает список -->
+                  <div class="selected" @click="openDropdown = !openDropdown">
+                    {{ newMemberId
+                        ? availableMembersMap[newMemberId].email
+                        : 'Выберите пользователя…' }}
+                    <span class="arrow" :class="{ open: openDropdown }">▾</span>
                   </div>
-                  <ul v-if="open" class="dropdown-list">
+
+                  <!-- сам список, клики в нём не всплывают наружу -->
+                  <ul v-if="openDropdown" class="dropdown-list">
                     <li
                       v-for="user in availableMembers"
                       :key="user.user_id"
-                      @click="select(user.user_id)"
                       class="dropdown-item"
+                      @click.stop="selectMember(user.user_id)"
                     >
-                      <img :src="user.avatar" class="item-avatar">
-                      {{ user.email }}
+                      <img :src="user.avatar" class="item-avatar" />
+                      {{ displayName(user) }}
                     </li>
                   </ul>
                 </div>
+
                 <button
-                  :disabled="newMemberId === null" 
+                  :disabled="!newMemberId"
                   @click="assignTaskMember"
                   class="assign-btn"
                 >
@@ -204,6 +234,25 @@
           <!-- Вкладка "Обсуждение" -->
           <div v-if="activeTab === 'discussion'" class="tab-pane">
             <DiscussionChat v-if="localTask.id" :task-id="localTask.id" />
+          </div>
+
+          <!-- Вкладка "История" -->
+          <div v-if="activeTab === 'history'" class="tab-pane history-pane">
+            <div v-if="historyLog.length === 0" class="no-history">
+              Нет истории действий
+            </div>
+            <ul v-else class="history-list">
+              <li v-for="(item, i) in historyLog" :key="i" class="history-item">
+                <div class="history-marker"></div>
+                <div class="history-content">
+                  <div class="history-header">
+                    <span class="history-user">{{ displayName({ email: item.user }) }}</span>
+                    <span class="history-ts">{{ formatTs(item.ts) }}</span>
+                  </div>
+                  <div class="history-action">{{ item.action }}</div>
+                </div>
+              </li>
+            </ul>
           </div>
 
           <!-- Вкладка "GitHub" -->
@@ -552,367 +601,311 @@ import axios from 'axios';
 import GitHubService from '@/services/GitHubService';
 import DiscussionChat from '@/components/DiscussionChat.vue';
 import * as XLSX from 'xlsx';
+import MarkdownIt from 'markdown-it';
 
 export default {
-  components: {
-    DiscussionChat,
-  },
+  name: 'TaskModal',
+  components: { DiscussionChat },
   props: {
-    task: Object,
-    board: Object, 
-    currentUser: Object,
+    task: { type: Object, required: true },
+    board: { type: Object, required: true },
+    currentUser: { type: Object, required: true },
   },
   data() {
     return {
+      // Табы
       activeTab: 'general',
       tabs: [
         { id: 'general', icon: '/icons/info-icon.png' },
         { id: 'members', icon: '/icons/members-icon.png' },
         { id: 'discussion', icon: '/icons/discussion-icon.png' },
-        { id: 'github', icon: '/icons/github-icon.png' }
+        { id: 'history', icon: '/icons/history-icon.png' },
+        { id: 'github', icon: '/icons/github-icon.png' },
       ],
-      isEditingTitle: false,
+
+      // Локальная копия задачи
       localTask: {
-        id: this.task.id,
-        name: this.task.name || '',
-        description: this.task.description || '',
-        subtasks: Array.isArray(this.task.subtasks) ? [...this.task.subtasks] : [],
-        files: Array.isArray(this.task.attachments) ? [...this.task.attachments] : [],
-        column: this.task.column,
-        members: Array.isArray(this.task.members) ? [...this.task.members] : [],
-        priority: this.task.priority || 'medium'
+        id: this.task && this.task.id || null,
+        name: this.task && this.task.name || '',
+        description: this.task && this.task.description || '',
+        subtasks: Array.isArray(this.task && this.task.subtasks) ? [...this.task.subtasks] : [],
+        files: Array.isArray(this.task && this.task.attachments) ? [...this.task.attachments] : [],
+        members: Array.isArray(this.task && this.task.members) ? [...this.task.members] : [],
+        priority: this.task && this.task.priority || 'medium',
+        column: this.task && this.task.column || null,
       },
+
+      // Поля формы / стейты
+      newSubtaskName: '',
       uploadedFiles: [],
       deletedFileIds: [],
+      newMemberId: null,
+      openDropdown: false,
+      isEditingTitle: false,
+      oldTitle: '',
+      isEditingDescription: false,
+      oldDescription: '',
+
       isParticipant: false,
+      _historyInitialized: false,
+      _completedMap: {},
+
+      // Markdown-it
+      md: new MarkdownIt({ html: true, linkify: true, typographer: true }),
+
+      // GitHub
       selectedGitHubAction: '',
       githubSearchQuery: '',
       searchResults: [],
       linkedRepo: null,
       commits: [],
       pullRequests: [],
-      repoUrl: '',
       recentRepos: [],
-      commitsDebug: null,
       repoDetails: {},
-      newSubtaskName: '',
-      githubActiveTab: 'search',
       isSearching: false,
-      newMemberId: null,
-      open: false,
     };
   },
   computed: {
+    hasSubtasks() {
+      return Array.isArray(this.localTask.subtasks) && this.localTask.subtasks.length > 0;
+    },
     progress() {
       if (!this.hasSubtasks) return 0;
-      const completed = this.localTask.subtasks.filter(s => s.completed).length;
-      return Math.round((completed / this.localTask.subtasks.length) * 100);
+      const done = this.localTask.subtasks.filter(s => s && s.completed).length;
+      return Math.round((done / this.localTask.subtasks.length) * 100);
     },
-    hasSubtasks() {
-      return this.localTask.subtasks && this.localTask.subtasks.length > 0;
+    renderedDescription() {
+      const txt = (this.localTask.description || '').trim();
+      return this.md.render(txt || '_Нет описания_');
     },
-    isOwner() {
-      return this.currentUser
-        && this.board
-        && this.board.owner
-        && this.board.owner.email === this.currentUser.email;
+    historyLog() {
+      return this.$store.getters['tasks/getHistory'](this.localTask.id) || [];
     },
     availableMembers() {
-      const boardList = this.board.members || []
-      const taskEmails = (this.localTask.members || []).map(m => m.email)
-      return boardList.filter(u => u.email && !taskEmails.includes(u.email))
+      const used = (this.localTask.members || []).map(m => m.user_id);
+      const boardMembers = (this.board && this.board.members) || [];
+      return boardMembers.filter(u =>
+        u != null &&
+        u.user_id != null &&
+        u.user_id !== this.currentUser.id &&
+        !used.includes(u.user_id)
+      );
     },
     availableMembersMap() {
-      return Object.fromEntries(this.availableMembers.map(u => [u.user_id, u]));
+      return Object.fromEntries(
+        this.availableMembers.map(u => [u.user_id, u])
+      );
+    },
+    isOwner() {
+      return (
+        this.currentUser &&
+        this.board &&
+        this.board.owner &&
+        this.board.owner.email === this.currentUser.email
+      );
     },
   },
   watch: {
     task: {
+
+      immediate: true,
+      deep: true,
       handler(newTask) {
+        if (!newTask) return;
+        // Обновляем локальную копию
         this.localTask = {
           id: newTask.id,
           name: newTask.name || '',
           description: newTask.description || '',
           subtasks: Array.isArray(newTask.subtasks) ? [...newTask.subtasks] : [],
           files: Array.isArray(newTask.attachments) ? [...newTask.attachments] : [],
-          column: newTask.column,
           members: Array.isArray(newTask.members) ? [...newTask.members] : [],
-          priority: newTask.priority || 'medium'
+          priority: newTask.priority || 'medium',
+          column: newTask.column,
         };
-      },
-      deep: true
-    },
-    selectedGitHubAction(newAction) {
-      if (newAction && !this.linkedRepo) {
-        this.fetchRecentRepos();
-      } else if (newAction === 'track-commits' && this.linkedRepo) {
-        this.refreshCommits();
-      } else if (newAction === 'view-prs' && this.linkedRepo) {
-        this.refreshPRs();
-      } else if (newAction === 'repo-info' && this.linkedRepo) {
-        this.refreshRepoInfo();
+        // Инициализация истории
+        const serverHistory = Array.isArray(newTask.history) ? newTask.history : null;
+        const existing = this.$store.getters['tasks/getHistory'](newTask.id) || [];
+        if (serverHistory) {
+          this.$store.commit('tasks/INIT_HISTORY', { taskId: newTask.id, events: serverHistory });
+        } else if (!existing.length) {
+          this.$store.commit('tasks/INIT_HISTORY', {
+            taskId: newTask.id,
+            events: [{
+              user: this.currentUser.email,
+              action: `создал задачу «${newTask.name}»`,
+              ts: Date.now()
+            }]
+          });
+        }
       }
     },
-    'localTask.subtasks': {
-      handler() {
-        this.$nextTick(() => {
-          this.adjustSubtasksHeight();
-        });
-      },
-      deep: true
-    }
+    selectedGitHubAction(action) {
+      if (action === 'search' && this.githubSearchQuery) this.searchGitHubRepos();
+      if (action === 'track-commits' && this.linkedRepo) this.refreshCommits();
+      if (action === 'view-prs' && this.linkedRepo) this.refreshPRs();
+      if (action === 'repo-info' && this.linkedRepo) this.refreshRepoInfo();
+    },
   },
   methods: {
-    select(id) {
-      this.newMemberId = id;
-      this.open = false;
-    },
+    // ——— TITLE ———
     startEditingTitle() {
+      this.oldTitle = this.localTask.name || '';
       this.isEditingTitle = true;
-      this.$nextTick(() => {
-        this.$refs.titleInput.focus();
-      });
+      this.$nextTick(() => this.$refs.titleInput && this.$refs.titleInput.focus());
     },
-    stopEditingTitle() {
+    async stopEditingTitle() {
+      if (this.oldTitle !== this.localTask.name) {
+        const event = {
+          user: this.currentUser.email,
+          action: `изменил название задачи на «${this.localTask.name}»`,
+          ts: Date.now()
+        };
+        this.$store.commit('tasks/ADD_EVENT', { taskId: this.localTask.id, event });
+        await axios.post(`/api/tasks/${this.localTask.id}/history/`, event).catch(() => {});
+      }
       this.isEditingTitle = false;
     },
-    startEditingSubtask(index) {
-      // Прямое изменение свойства с реактивным обновлением
-      this.localTask.subtasks[index].editing = true;
-      this.$nextTick(() => {
-        const inputs = this.$el.querySelectorAll('.subtask-input');
-        if (inputs[index]) inputs[index].focus();
-      });
+
+    // ——— DESCRIPTION ———
+    startEditingDescription() {
+      this.oldDescription = this.localTask.description;
+      this.isEditingDescription = true;
+      this.$nextTick(() => this.$refs.descriptionTextarea && this.$refs.descriptionTextarea.focus());
     },
-    stopEditingSubtask(index) {
-      this.localTask.subtasks[index].editing = false;
-    },
-    addSubtask() {
-      if (!this.localTask.subtasks) {
-        this.localTask.subtasks = [];
+    async stopEditingDescription() {
+      if (this.oldDescription !== this.localTask.description) {
+        const event = {
+          user: this.currentUser.email,
+          action: `изменил описание задачи`,
+          ts: Date.now()
+        };
+        this.$store.commit('tasks/ADD_EVENT', { taskId: this.localTask.id, event });
+        await axios.post(`/api/tasks/${this.localTask.id}/history/`, event).catch(() => {});
       }
-      this.localTask.subtasks.push({
-        name: 'Новая подзадача',
-        completed: false,
-        editing: false
-      });
-      
-      // Обновляем высоту контейнера подзадач
+      this.isEditingDescription = false;
+    },
+
+    // ——— SUBTASKS ———
+    async addSubtaskWithName() {
+      const name = (this.newSubtaskName || '').trim();
+      if (!name) return;
+      this.localTask.subtasks = this.localTask.subtasks || [];
+      this.localTask.subtasks.push({ id: null, name, completed: false, editing: false });
+      const event = { user: this.currentUser.email, action: `добавил подзадачу «${name}»`, ts: Date.now() };
+      this.$store.commit('tasks/ADD_EVENT', { taskId: this.localTask.id, event });
+      await axios.post(`/api/tasks/${this.localTask.id}/history/`, event).catch(() => {});
+      this.newSubtaskName = '';
       this.$nextTick(() => {
         this.adjustSubtasksHeight();
-        
-        // Прокручиваем к последней добавленной подзадаче
         this.scrollToLastSubtask();
       });
     },
     scrollToLastSubtask() {
-      setTimeout(() => {
-        const subtasksEl = this.$el.querySelector('.subtasks');
-        if (!subtasksEl) return;
-        
-        // Прокручиваем контейнер к самому низу
-        subtasksEl.scrollTop = subtasksEl.scrollHeight;
-      }, 50); // Небольшая задержка для надежности
-    },
-    deleteSubtask(index) {
-      this.localTask.subtasks.splice(index, 1);
-      
-      // Обновляем высоту контейнера подзадач после удаления
-      this.$nextTick(() => {
-        this.adjustSubtasksHeight();
-      });
+      const el = this.$el.querySelector('.subtasks');
+      if (el) el.scrollTop = el.scrollHeight;
     },
     adjustSubtasksHeight() {
-      const subtasksEl = this.$el.querySelector('.subtasks');
-      if (!subtasksEl) return;
-      
-      const subtaskCount = this.localTask.subtasks ? this.localTask.subtasks.length : 0;
-      
-      // Простая логика: для пустого списка - фиксированная высота, 
-      // для непустого - автоматическая до максимума
-      if (subtaskCount === 0) {
-        // Если нет подзадач, устанавливаем минимальную высоту
-        subtasksEl.style.height = '160px'; // Увеличенная фиксированная высота для пустого состояния
-      } else {
-        // Для любого количества подзадач - убираем явную высоту,
-        // позволяя контейнеру расти до max-height из CSS
-        subtasksEl.style.height = 'auto';
+      const el = this.$el.querySelector('.subtasks');
+      if (!el) return;
+      el.style.height = this.hasSubtasks ? 'auto' : '160px';
+    },
+    startEditingSubtask(i) {
+      if (!(this.localTask.subtasks && this.localTask.subtasks[i])) return;
+      this.oldSubtaskName = this.localTask.subtasks[i].name;
+      this.localTask.subtasks[i].editing = true;
+      this.$nextTick(() => this.$refs.subtaskInputs && this.$refs.subtaskInputs[i] && this.$refs.subtaskInputs[i].focus());
+    },
+    async stopEditingSubtask(i) {
+      const sub = this.localTask.subtasks && this.localTask.subtasks[i];
+      if (!sub) return;
+      sub.editing = false;
+      if (sub.name !== this.oldSubtaskName) {
+        const event = { user: this.currentUser.email, action: `изменил название подзадачи на «${sub.name}»`, ts: Date.now() };
+        this.$store.commit('tasks/ADD_EVENT', { taskId: this.localTask.id, event });
+        await axios.post(`/api/tasks/${this.localTask.id}/history/`, event).catch(() => {});
       }
     },
-    updateProgress() {
-      // Обновление прогресса происходит автоматически через computed свойство
+    async deleteSubtask(i) {
+      const sub = this.localTask.subtasks && this.localTask.subtasks[i];
+      if (!sub) return;
+      this.localTask.subtasks.splice(i, 1);
+      const event = { user: this.currentUser.email, action: `удалил подзадачу «${sub.name}»`, ts: Date.now() };
+      this.$store.commit('tasks/ADD_EVENT', { taskId: this.localTask.id, event });
+      await axios.post(`/api/tasks/${this.localTask.id}/history/`, event).catch(() => {});
     },
-    closeModal() {
-      this.$emit('close');
+    async updateProgress(i) {
+      const s = this.localTask.subtasks && this.localTask.subtasks[i];
+      if (!s) return;
+      const prev = this._completedMap[i];
+      if (prev !== undefined && prev !== s.completed) {
+        const action = s.completed
+          ? `отметил подзадачу «${s.name}» выполненной`
+          : `снял отметку с подзадачи «${s.name}»`;
+        const event = { user: this.currentUser.email, action, ts: Date.now() };
+        this.$store.commit('tasks/ADD_EVENT', { taskId: this.localTask.id, event });
+        await axios.post(`/api/tasks/${this.localTask.id}/history/`, event).catch(() => {});
+      }
+      this._completedMap[i] = s.completed;
     },
-    isImage(type) {
-      return type && type.startsWith('image/');
-    },
-    handleFileUpload(e) {
-      const files = Array.from(e.target.files);
-      
-      // Проверяем наличие файлов
-      if (!files || files.length === 0) return;
-      
-      // Сохраняем файлы для отправки на сервер
-      this.uploadedFiles = [...this.uploadedFiles, ...files];
-      
-      // Отображаем превью файлов
-      files.forEach(file => {
-        const reader = new FileReader();
-        
-        reader.onload = (e) => {
-          if (!this.localTask.files) {
-            this.localTask.files = [];
-          }
-          
-          this.localTask.files.push({
-            name: file.name,
-            type: file.type,
-            url: e.target.result,
-            isNew: true // Флаг для новых файлов
-          });
-        };
-        
-        reader.readAsDataURL(file);
-      });
-      
-      // Сбрасываем значение инпута
-      this.$refs.fileInput.value = '';
-    },
-    async saveTask() {
-      try {
-        const formData = new FormData();
-        
-        // Если название пустое, создаем автоматическое имя
-        const taskName = this.localTask.name && this.localTask.name.trim() ? 
-                         this.localTask.name.trim() : 
-                         'Задача ' + new Date().toLocaleString('ru-RU', {
-                           day: '2-digit',
-                           month: '2-digit',
-                           hour: '2-digit',
-                           minute: '2-digit'
-                         });
-                         
-        formData.append('name', taskName);
-        formData.append('description', this.localTask.description || '');
-        formData.append('priority', this.localTask.priority);
-        formData.append('order', '0');
-        
-        const columnId = this.localTask.column instanceof Object 
-          ? this.localTask.column.id 
-          : this.localTask.column;
-        
-        formData.append('column', columnId);
-        
-        // Подзадачи - очищаем поле editing перед отправкой
-        if (this.localTask.subtasks && this.localTask.subtasks.length > 0) {
-          // Создаем копию массива для очистки
-          const cleanSubtasks = this.localTask.subtasks.map(s => {
-            // Проверяем, есть ли id у подзадачи
-            if (s.id && isNaN(parseInt(s.id))) {
-              // Временно удаляем id, если он не числовой
-              const { id, ...rest } = s;
-              return {
-                ...rest,
-                name: s.name || '',
-                completed: Boolean(s.completed)
-              };
-            }
-            
-            return {
-              id: s.id,
-              name: s.name || '',
-              completed: Boolean(s.completed)
-            };
-          });
-          
-          console.log('Отправляемые подзадачи:', cleanSubtasks);
-          formData.append('subtasks', JSON.stringify(cleanSubtasks));
-        } else {
-          // Если подзадач нет, отправляем пустой массив
-          formData.append('subtasks', JSON.stringify([]));
-        }
-        
-        // Новые файлы
-        if (this.uploadedFiles.length > 0) {
-          this.uploadedFiles.forEach(file => {
-            formData.append('attachments', file);
-          });
-        }
 
-        if (this.deletedFileIds.length > 0) {
-          formData.append('deleted_files', JSON.stringify(this.deletedFileIds));
-        }
-        
-        const config = {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-            Authorization: `Bearer ${localStorage.getItem('token')}`
-          }
+    // ——— FILES ———
+    async handleFileUpload(e) {
+      const files = Array.from((e && e.target && e.target.files) || []);
+      for (const file of files) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          this.localTask.files = this.localTask.files || [];
+          this.localTask.files.push({ id: null, name: file.name, type: file.type, url: reader.result, isNew: true });
         };
-        
-        let response;
-        
-        if (this.localTask.id) {
-          response = await axios.patch(`/api/tasks/${this.localTask.id}/`, formData, config);
-        } else {
-          response = await axios.post('/api/tasks/', formData, config);
-        }
-        
-        // Обновляем локальные данные задачи после сохранения
-        const updatedTask = {
-          ...response.data,
-          subtasks: response.data.subtasks || [],
-          files: response.data.attachments || []
-        };
-        
-        this.localTask = updatedTask;
-        
-        // Проверяем участие пользователя в задаче
-        await this.checkParticipation();
-        
-        // Передаем обновленную задачу в родительский компонент
-        this.$emit('saveTask', updatedTask);
-        this.closeModal();
-        
-      } catch (error) {
-        console.error('Ошибка сохранения задачи:', error);
-        let errorMessage = 'Произошла ошибка при сохранении задачи';
-        
-        if (error.response) {
-          if (error.response.data) {
-            if (typeof error.response.data === 'object') {
-              errorMessage = Object.values(error.response.data).flat().join('\n');
-            } else {
-              errorMessage = error.response.data;
-            }
-          }
-        } else if (error.message) {
-          errorMessage = error.message;
-        }
-        
-        alert(errorMessage);
+        reader.readAsDataURL(file);
+        const event = { user: this.currentUser.email, action: `прикрепил файл «${file.name}»`, ts: Date.now() };
+        this.$store.commit('tasks/ADD_EVENT', { taskId: this.localTask.id, event });
+        await axios.post(`/api/tasks/${this.localTask.id}/history/`, event).catch(() => {});
       }
+      this.uploadedFiles.push(...files);
+      if (this.$refs.fileInput) this.$refs.fileInput.value = '';
     },
-    removeFile(index) {
-      if (this.localTask.files && this.localTask.files.length > index) {
-        const file = this.localTask.files[index];
-        if (file.id) {
-          // If the file has an ID, it's from the server, so add it to deletedFileIds
-          this.deletedFileIds.push(file.id);
-        }
-        this.localTask.files.splice(index, 1);
-      }
+    async removeFile(i) {
+      const f = this.localTask.files && this.localTask.files[i];
+      if (!f) return;
+      if (f.id) this.deletedFileIds.push(f.id);
+      this.localTask.files.splice(i, 1);
+      const event = { user: this.currentUser.email, action: `удалил файл «${f.name}»`, ts: Date.now() };
+      this.$store.commit('tasks/ADD_EVENT', { taskId: this.localTask.id, event });
+      await axios.post(`/api/tasks/${this.localTask.id}/history/`, event).catch(() => {});
     },
     downloadFile(file) {
-      // Создаем временную ссылку для скачивания
+      if (!(file && file.url)) return;
       const link = document.createElement('a');
       link.href = file.url;
-      link.download = file.name; // Имя файла при скачивании
+      link.download = file.name || '';
       document.body.appendChild(link);
-      link.click(); // Инициируем скачивание
-      document.body.removeChild(link); // Удаляем ссылку после скачивания
+      link.click();
+      document.body.removeChild(link);
+    },
+
+    // ——— MEMBERS ———
+    selectMember(id) {
+      this.newMemberId = id;
+      this.openDropdown = false;
+    },
+    async assignTaskMember() {
+      if (!this.newMemberId) return;
+      await axios.post(`/api/tasks/${this.localTask.id}/members/`, { user_id: this.newMemberId }).catch(() => {});
+      const u = this.availableMembersMap[this.newMemberId];
+      if (u) this.localTask.members.push(u);
+      const event = { user: u && u.email || '', action: `был назначен участником задачи`, ts: Date.now() };
+      this.$store.commit('tasks/ADD_EVENT', { taskId: this.localTask.id, event });
+      await axios.post(`/api/tasks/${this.localTask.id}/history/`, event).catch(() => {});
+      await this.fetchTaskData();
+    },
+    async removeTaskMember(m) {
+      await axios.delete(`/api/tasks/${this.localTask.id}/members/${m && m.id}/`).catch(() => {});
+      const event = { user: m && m.email || '', action: `был исключен из участников задачи`, ts: Date.now() };
+      this.$store.commit('tasks/ADD_EVENT', { taskId: this.localTask.id, event });
+      await axios.post(`/api/tasks/${this.localTask.id}/history/`, event).catch(() => {});
+      await this.fetchTaskData();
     },
     async checkParticipation() {
       if (!this.localTask.id) {
@@ -933,103 +926,80 @@ export default {
       }
     },
     async toggleParticipation() {
-      if (!this.localTask.id) {
-        alert("Сначала сохраните задачу, чтобы присоединиться к ней.");
-        return;
+      if (!this.localTask.id) return;
+      if (this.isParticipant) {
+        await axios.delete(`/api/tasks/${this.localTask.id}/members/${this.currentUser.id}/`).catch(() => {});
+        this.localTask.members = this.localTask.members.filter(m => m.id !== this.currentUser.id);
+        const event = { user: this.currentUser.email, action: `отказался от участия`, ts: Date.now() };
+        this.$store.commit('tasks/ADD_EVENT', { taskId: this.localTask.id, event });
+        await axios.post(`/api/tasks/${this.localTask.id}/history/`, event).catch(() => {});
+      } else {
+        await axios.post(`/api/tasks/${this.localTask.id}/members/`, {}).catch(() => {});
+        this.localTask.members.push({ id: this.currentUser.id, email: this.currentUser.email, avatar: this.currentUser.avatar });
+        const event = { user: this.currentUser.email, action: `присоединился к участникам задачи`, ts: Date.now() };
+        this.$store.commit('tasks/ADD_EVENT', { taskId: this.localTask.id, event });
+        await axios.post(`/api/tasks/${this.localTask.id}/history/`, event).catch(() => {});
       }
-      try {
-        if (this.isParticipant) {
-          await axios.delete(`/api/tasks/${this.localTask.id}/members/${this.$store.state.user.id}/`, {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('token')}`
-            }
-          });
-        } else {
-          await axios.post(`/api/tasks/${this.localTask.id}/members/`, {}, {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('token')}`
-            }
-          });
-        }
-        await this.fetchTaskData();
-        await this.checkParticipation();
-      } catch (error) {
-        console.error('Ошибка изменения статуса участия:', error);
-      }
+      this.isParticipant = !this.isParticipant;
     },
+
+    // ——— LOAD / SAVE ———
     async fetchTaskData() {
       if (!this.localTask.id) return;
+      const { data } = await axios.get(`/api/tasks/${this.localTask.id}/`).catch(() => ({ data: {} }));
+      Object.assign(this.localTask, {
+        name: data.name || '',
+        description: data.description || '',
+        subtasks: Array.isArray(data.subtasks) ? data.subtasks : [],
+        files: Array.isArray(data.attachments) ? data.attachments : [],
+        members: Array.isArray(data.members) ? data.members : [],
+        priority: data.priority || this.localTask.priority
+      });
+      if (!this._historyInitialized) {
+        (this.localTask.subtasks || []).forEach((s, idx) => { this._completedMap[idx] = !!s.completed; });
+        this._historyInitialized = true;
+        const existing = this.$store.getters['tasks/getHistory'](this.localTask.id) || [];
+        if (!existing.length) {
+          this.$store.commit('tasks/INIT_HISTORY', {
+            taskId: this.localTask.id,
+            events: [{ user: this.currentUser.email, action: `создал задачу «${data.name}»`, ts: Date.now() }]
+          });
+        }
+      }
+      const me = await axios.get('/api/users/me/').catch(() => ({ data: {} }));
+      this.isParticipant = (this.localTask.members || []).some(m=>m && m.id===me.data.id);
+    },
+    async saveTask() {
+      const form = new FormData();
+      form.append('name', this.localTask.name || '');
+      form.append('description', this.localTask.description || '');
+      form.append('priority', this.localTask.priority || '');
+      form.append('column', this.localTask.column || '');
+      form.append('subtasks', JSON.stringify(
+        (this.localTask.subtasks || []).map(s => ({
+          id: s.id,
+          name: s.name,
+          completed: !!s.completed
+        }))
+      ));
+      (this.uploadedFiles || []).forEach(f => form.append('attachments', f));
+      if ((this.deletedFileIds || []).length) {
+        form.append('deleted_files', JSON.stringify(this.deletedFileIds));
+      }
+      await axios.patch(`/api/tasks/${this.localTask.id}/`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      }).catch(() => {});
+      await this.fetchTaskData();
+      this.$emit('saveTask', this.localTask);
+      this.$emit('close');
+    },
 
-      try {
-        const { data } = await axios.get(`/api/tasks/${this.localTask.id}/`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-        });
-        this.localTask = {
-          id:          data.id,
-          name:        data.name,
-          description: data.description,
-          priority:    data.priority,
-          column:      data.column,
-          // **ВАЖНО**: переносим участников!
-          members:     data.members || [],
-          // остальные поля, которые вы используете:
-          subtasks:    data.subtasks || [],
-          // прикреплённые файлы
-          files:       data.attachments || []
-        };
-        
-        // Обновляем высоту контейнера подзадач после загрузки данных
-        this.$nextTick(() => {
-          this.adjustSubtasksHeight();
-        });
-      } catch (error) {
-        console.error('Ошибка загрузки данных задачи:', error);
-      }
-    },
-    // Назначение участника через PATCH задачи
-    async assignTaskMember() {
-      if (this.newMemberId === null) return;
-      try {
-        await axios.post(
-          `/api/tasks/${this.localTask.id}/members/`,
-          { user_id: Number(this.newMemberId) },
-          { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
-        )
-        await this.fetchTaskData()
-        this.newMemberId = null
-      } catch (e) {
-        console.error('Не удалось назначить участника:', e)
-        alert('Ошибка назначения участника')
-      }
-    },
-    // Удаление участника через PATCH задачи
-    async removeTaskMember(member) {
-      try {
-        await axios.delete(
-          `/api/tasks/${this.localTask.id}/members/${member.id}/`,
-          { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
-        );
-        await this.fetchTaskData();
-      } catch (e) {
-        console.error('Не удалось удалить участника:', e.response || e);
-        alert('Ошибка удаления участника');
-      }
-    },
+    // ——— GITHUB ———
     async searchGitHubRepos() {
-      if (!this.githubSearchQuery.trim()) {
-        this.searchResults = [];
-        return;
-      }
-      
-      try {
-        this.isSearching = true;
-        this.searchResults = await GitHubService.searchRepositories(this.githubSearchQuery);
-      } catch (error) {
-        console.error('Ошибка поиска репозиториев:', error);
-        this.searchResults = [];
-      } finally {
-        this.isSearching = false;
-      }
+      if (!(this.githubSearchQuery || '').trim()) { this.searchResults = []; return; }
+      this.isSearching = true;
+      this.searchResults = await GitHubService.searchRepositories(this.githubSearchQuery).catch(() => []);
+      this.isSearching = false;
     },
     async selectRepo(repo) {
       this.linkedRepo = repo;
@@ -1038,202 +1008,96 @@ export default {
       await this.refreshCommits();
     },
     async refreshCommits() {
-      if (!this.linkedRepo) return;
-      try {
-        console.log('Запрос коммитов для', this.linkedRepo.full_name);
-        this.commitsDebug = { status: 'loading' };
-        
-        // Очищаем текущие коммиты перед загрузкой новых
-        this.commits = [];
-        
-        // Загружаем коммиты
-        const commits = await GitHubService.getCommits(this.linkedRepo.full_name);
-        console.log('Полученные коммиты:', commits);
-        
-        // Проверяем, что данные пришли
-        if (!commits || !Array.isArray(commits)) {
-          console.error('Неверный формат данных о коммитах:', commits);
-          this.commitsDebug = { 
-            status: 'error', 
-            message: 'Неверный формат данных', 
-            data: commits 
-          };
-          return;
-        }
-        
-        this.commits = commits;
-        this.commitsDebug = { 
-          status: 'success', 
-          count: commits.length 
-        };
-      } catch (error) {
-        console.error('Ошибка загрузки коммитов:', error);
-        this.commitsDebug = { 
-          status: 'error', 
-          message: error.message, 
-          stack: error.stack
-        };
-      }
-    },
-    async linkRepository() {
-      if (!this.repoUrl) {
-        alert('Введите URL репозитория');
-        return;
-      }
-
-      try {
-        // Парсим URL репозитория
-        const { fullName } = GitHubService.parseRepositoryUrl(this.repoUrl);
-        
-        // Получаем информацию о репозитории
-        const repoData = await GitHubService.getRepository(fullName);
-        
-        // Привязываем репозиторий к задаче
-        await GitHubService.linkRepository(repoData.full_name, this.localTask.id);
-        
-        this.linkedRepo = repoData;
-        this.repoUrl = '';
-        
-        // Обновляем список недавних репозиториев
-        await this.fetchRecentRepos();
-      } catch (error) {
-        console.error('Ошибка привязки репозитория:', error);
-        if (error.message === 'Неверный формат URL репозитория GitHub') {
-          alert(error.message);
-        } else if (error.response && error.response.status === 404) {
-          alert('Репозиторий не найден. Проверьте URL и права доступа.');
-        } else {
-          alert('Ошибка при привязке репозитория. Попробуйте позже.');
-        }
-      }
+      if(!(this.linkedRepo && this.linkedRepo.full_name)) return;
+      this.commits = [];
+      this.commits = await GitHubService.getCommits(this.linkedRepo.full_name).catch(() => []);
     },
     async refreshPRs() {
-      if (!this.linkedRepo) return;
+      if(!(this.linkedRepo && this.linkedRepo.full_name)) return;
+      this.pullRequests = await GitHubService.getPullRequests(this.linkedRepo.full_name).catch(() => []);
+    },
+    async linkRepository() {
+      if (!this.repoUrl) { alert('Введите URL репозитория'); return; }
       try {
-        this.pullRequests = await GitHubService.getPullRequests(this.linkedRepo.full_name);
-      } catch (error) {
-        console.error('Ошибка загрузки Pull Requests:', error);
+        const { fullName } = GitHubService.parseRepositoryUrl(this.repoUrl);
+        const repoData = await GitHubService.getRepository(fullName);
+        await GitHubService.linkRepository(repoData.full_name, this.localTask.id);
+        this.linkedRepo = repoData;
+        this.repoUrl = '';
+        await this.fetchRecentRepos();
+      } catch (e) {
+        console.error(e);
+        alert('Не удалось привязать репозиторий.');
       }
-    },
-    formatDate(dateString) {
-      if (!dateString) return '';
-      
-      const date = new Date(dateString);
-      return date.toLocaleDateString('ru-RU', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    },
-    changeRepo() {
-      this.linkedRepo = null;
     },
     async fetchRecentRepos() {
-      try {
-        this.recentRepos = await GitHubService.getRecentRepositories();
-      } catch (error) {
-        console.error('Ошибка загрузки недавних репозиториев:', error);
-      }
+      this.recentRepos = await GitHubService.getRecentRepositories().catch(() => []);
     },
     async refreshRepoInfo() {
-      if (!this.linkedRepo) return;
-      try {
-        this.repoDetails = await GitHubService.getRepositoryInfo(this.linkedRepo.full_name);
-      } catch (error) {
-        console.error('Ошибка загрузки информации о репозитории:', error);
-      }
+      if(!(this.linkedRepo && this.linkedRepo.full_name)) return;
+      this.repoDetails = await GitHubService.getRepositoryInfo(this.linkedRepo.full_name).catch(() => ({}));
     },
-    addSubtaskWithName() {
-      if (!this.localTask.subtasks) {
-        this.localTask.subtasks = [];
-      }
-      this.localTask.subtasks.push({
-        name: this.newSubtaskName,
-        completed: false,
-        editing: false
-      });
-      
-      // Обновляем высоту контейнера подзадач
-      this.$nextTick(() => {
-        this.adjustSubtasksHeight();
-        
-        // Прокручиваем к последней добавленной подзадаче
-        this.scrollToLastSubtask();
-      });
-      
-      // Сбрасываем значение новой подзадачи
-      this.newSubtaskName = '';
-    },
+
+    // ——— REPORT ———
     async generateTaskReport() {
       try {
         const response = await axios.get(`/api/reports/`, {
-          params: {
-            report_type: 'tasks',
-            task_id: this.localTask.id
-          },
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`
-          }
+          params: { report_type: 'tasks', task_id: this.localTask.id },
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
         });
-        
-        // Создаем рабочую книгу Excel
-        const workbook = XLSX.utils.book_new();
-        
-        // Основная информация о задаче
-        const taskData = [{
+        const wb = XLSX.utils.book_new();
+        const info = [ {
           'Название': response.data.name,
           'Описание': response.data.description,
-          'Статус': response.data.status,
           'Приоритет': response.data.priority,
-          'Проект': response.data.project,
+          'Участники': (response.data.members || []).join(', '),
           'Создано': new Date(response.data.created_at).toLocaleDateString(),
-          'Обновлено': new Date(response.data.updated_at).toLocaleDateString(),
-          'Участники': response.data.members.join(', ')
-        }];
-        
-        const taskWs = XLSX.utils.json_to_sheet(taskData);
-        XLSX.utils.book_append_sheet(workbook, taskWs, 'Информация о задаче');
-        
-        // Добавляем лист с подзадачами, если они есть
-        if (this.localTask.subtasks && this.localTask.subtasks.length > 0) {
-          const subtasksData = this.localTask.subtasks.map(subtask => ({
-            'Название': subtask.name,
-            'Статус': subtask.completed ? 'Выполнено' : 'Не выполнено',
-            'Создано': new Date(subtask.created_at).toLocaleDateString(),
-            'Обновлено': new Date(subtask.updated_at).toLocaleDateString()
+          'Обновлено': new Date(response.data.updated_at).toLocaleDateString()
+        } ];
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(info), 'Задача');
+        if (this.hasSubtasks) {
+          const st = this.localTask.subtasks.map(s => ({
+            Название: s.name,
+            Статус: s.completed ? 'Выполнено' : 'Не выполнено'
           }));
-          const subtasksWs = XLSX.utils.json_to_sheet(subtasksData);
-          XLSX.utils.book_append_sheet(workbook, subtasksWs, 'Подзадачи');
+          XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(st), 'Подзадачи');
         }
-        
-        // Генерируем имя файла с датой
-        const date = new Date().toISOString().split('T')[0];
-        const filename = `task_report_${this.localTask.id}_${date}.xlsx`;
-        
-        // Скачиваем файл
-        XLSX.writeFile(workbook, filename);
-      } catch (error) {
-        console.error('Ошибка при формировании отчёта:', error);
-        if (error.response) {
-          console.error('Response data:', error.response.data);
-          console.error('Response status:', error.response.status);
-        }
-        alert('Произошла ошибка при формировании отчёта. Пожалуйста, попробуйте снова.');
+        XLSX.writeFile(wb, `task_report_${this.localTask.id}_${Date.now()}.xlsx`);
+      } catch (e) {
+        console.error(e);
+        alert('Не удалось сформировать отчёт');
       }
+    },
+
+    // ——— UI helpers ———
+    closeModal() {
+      this.$emit('close');
+    },
+    isImage(type) {
+      return typeof type === 'string' && type.startsWith('image/');
+    },
+    renderMarkdown(text) {
+      return this.md.render(text || '');
+    },
+    formatTs(ts) {
+      const d = new Date(ts);
+      return d.toLocaleString('ru-RU', { 
+        day:'2-digit', month:'2-digit', year:'numeric', 
+        hour:'2-digit', minute:'2-digit' 
+      });
+    },
+    displayName(obj) {
+      // obj может быть либо { first_name, last_name, email }, либо { email: 'user@...' }
+      const name = [obj.first_name, obj.last_name].filter(Boolean).join(' ');
+      return name || obj.email || '';
     },
   },
   mounted() {
-    if (this.localTask.id) {
+    if (this.localTask && this.localTask.id) {
       this.fetchTaskData();
-      this.checkParticipation();
+      this.checkParticipation && this.checkParticipation();
     }
-    
-    // Инициализируем высоту контейнера подзадач при загрузке
-    this.$nextTick(() => {
-      this.adjustSubtasksHeight();
-    });
+    this.$nextTick(() => this.adjustSubtasksHeight());
   }
 };
 </script>
@@ -1254,7 +1118,7 @@ export default {
 .sticky-tabs {
   position: absolute;
   left: -50px; /* Увеличиваем выступ за край */
-  top: 35%;
+  top: 40%;
   transform: translateY(-40%);
   z-index: 1003; /* Повышаем над всеми элементами */
   filter: drop-shadow(-5px 5px 10px rgba(0,0,0,0.1)); /* Добавляем тень */
@@ -1278,6 +1142,7 @@ export default {
 .tab:nth-child(2) { transform: rotate(-2deg); z-index: 1; margin-left: -30px; }
 .tab:nth-child(3) { transform: rotate(0deg); z-index: 2; margin-left: -25px; }
 .tab:nth-child(4) { transform: rotate(2deg); z-index: 3; margin-left: -20px; }
+.tab:nth-child(5) { transform: rotate(1deg); z-index: 4; margin-left: -20px; }
 
 .tab::after {
   transform: none !important;
@@ -1300,6 +1165,7 @@ export default {
 .tab.color-1 { background: #ffa500; } /* Оранжевый */
 .tab.color-2 { background: #4CAF50; } /* Зеленый */
 .tab.color-3 { background: #5b9cff; } /* Голубой */
+.tab.color-4 { background: #d8b4fe; } /* Фиолетовый */
 
 .tab.active {
   transform: rotate(-1deg) !important;
@@ -1325,11 +1191,16 @@ export default {
   padding: 20px;
   box-shadow: 0 2px 10px rgba(0,0,0,0.1);
   min-height: 400px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .tab-pane {
   animation: fadeIn 0.3s ease;
   overflow: auto !important;
+  flex: 1;
+  overflow: auto;
 }
 
 .modal-body-with-tabs {
@@ -1344,6 +1215,47 @@ export default {
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* Убираем горизонтальный scroll и растягиваем на всю ширину */
+.description-input,
+.description-preview {
+  width: 100%;
+  box-sizing: border-box;
+  white-space: pre-wrap; /* чтобы Markdown-превью не склеивалось */
+}
+
+/* Стилизуем превью */
+.description-preview {
+  padding: 10px;
+  border: 1px solid #d1d5da;
+  border-radius: 6px;
+  background: #fafafa;
+  min-height: 80px;
+  overflow-y: auto;
+}
+
+/* Иконка редактирования */
+.description-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.edit-icon {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  filter: grayscale(1) brightness(0.5);
+  transition: filter .2s;
+}
+.edit-icon:hover {
+  filter: none;
+}
+
+.no-description {
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  color: #64748b; /* можно настроить цвет под общий стиль */
+  font-style: italic; /* опционально, чтобы сохранить курсив из Markdown */
 }
 
 /* Адаптация остальных стилей */
@@ -1426,10 +1338,9 @@ export default {
 .modal-content::before {
   content: "";
   position: absolute;
-  top: 0;
   left: 0;
-  top: 15%;
-  width: 8px;                   /* = padding-left, подгоните под ваш отступ */
+  top: 20.5%;
+  width: 9px;                   /* = padding-left, подгоните под ваш отступ */
   height: 50%;
   background: #f0f0f0; /* совпадает с фоном .modal-content */
   pointer-events: none;          /* не блокирует клики по табам */
@@ -1938,6 +1849,71 @@ export default {
   background: #ccc;
   cursor: not-allowed;
   box-shadow: none;
+}
+
+.history-list {
+  position: relative;
+  margin: 0;
+  padding: 20px 0;
+}
+.history-list::before {
+  content: '';
+  position: absolute;
+  left: 20px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #e2e8f0; /* тонкая линия ведёт вдоль элементов */
+}
+.history-item {
+  position: relative;
+  display: flex;
+  margin-bottom: 24px;
+  padding-left: 40px;
+}
+.history-marker {
+  position: absolute;
+  left: 12px;
+  top: 4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #5b9cff;
+  box-shadow: 0 0 0 4px rgba(91,156,255,0.2);
+}
+.history-content {
+  background: rgba(255,255,255,0.8);
+  border-radius: 8px;
+  padding: 12px 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+  flex: 1;
+}
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.history-user {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 14px;
+}
+.history-ts {
+  font-size: 12px;
+  color: #94a3b8;
+}
+.history-action {
+  font-size: 14px;
+  color: #4a5568;
+  line-height: 1.4;
+}
+.no-history {
+  padding: 40px;
+  text-align: center;
+  color: #64748b;
+  font-style: italic;
+  font-family: 'Segoe UI', sans-serif;
 }
 
 .github-section label {

@@ -14,7 +14,8 @@ from .views import (
     MessageViewSet,
     NeuroChatViewSet,
     NeuroSessionView,
-    ReportsView
+    ReportsView,
+    TaskHistoryViewSet
 )
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -30,6 +31,7 @@ router.register(r'boards/(?P<board_id>\d+)/members', BoardMembersViewSet, basena
 router.register(r'tasks/(?P<task_pk>\d+)/members', TaskMemberViewSet, basename='taskmembers')
 router.register(r'tasks/(?P<task_pk>\d+)/messages', MessageViewSet, basename='task-messages')
 router.register(r'neuro-chat', NeuroChatViewSet, basename='neuro-chat')
+router.register(r'tasks/(?P<task_pk>\d+)/history', TaskHistoryViewSet, basename='task-history')
 
 
 urlpatterns = [

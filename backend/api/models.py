@@ -121,7 +121,8 @@ class Task(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='medium')
     order = models.PositiveIntegerField(default=0)
-
+    history = models.JSONField(default=list, blank=True)
+    
     class Meta:
         ordering = ['order']
 

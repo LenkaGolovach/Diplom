@@ -64,6 +64,7 @@
       :current-user="currentUser"
       @close="closeModal"
       @saveTask="saveTask"
+      @members-changed="fetchBoardData"
     />
 
     <BoardMembersModal

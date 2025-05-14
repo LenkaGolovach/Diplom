@@ -115,10 +115,12 @@ class TaskMemberSerializer(serializers.ModelSerializer):
     id     = serializers.IntegerField(source='user.id', read_only=True)
     email = serializers.EmailField(source='user.email')
     avatar = serializers.ImageField(source='user.avatar')
+    first_name = serializers.CharField(source='user.first_name', read_only=True)
+    last_name  = serializers.CharField(source='user.last_name', read_only=True)
 
     class Meta:
         model = TaskMember
-        fields = ['id', 'email', 'avatar', 'joined_at']
+        fields = ['id', 'email', 'first_name', 'last_name', 'avatar', 'joined_at']
 
 class TaskSerializer(serializers.ModelSerializer):
     subtasks = SubTaskSerializer(many=True, required=False)
@@ -131,10 +133,11 @@ class TaskSerializer(serializers.ModelSerializer):
     column_name = serializers.CharField(source='column.name', read_only=True)
     board_name = serializers.CharField(source='column.board.name', read_only=True)
     priority = serializers.ChoiceField(choices=Task.PRIORITY_CHOICES, required=False, default='medium')
+    history = serializers.JSONField(read_only=True)
 
     class Meta:
         model = Task
-        fields = ['id', 'name', 'description', 'column', 'column_name', 'board_name', 
+        fields = ['id', 'name', 'description', 'column', 'column_name', 'board_name', 'history', 
                  'created_at', 'updated_at', 'subtasks', 'attachments', 'deleted_files', 'members', 'priority']
         read_only_fields = ['created_at', 'updated_at']
         extra_kwargs = {
@@ -325,10 +328,12 @@ class BoardMemberSerializer(serializers.ModelSerializer):
     user_id = serializers.IntegerField(source='user.id', read_only=True)
     email = serializers.EmailField(source='user.email')
     avatar = serializers.ImageField(source='user.avatar')
+    first_name = serializers.CharField(source='user.first_name', read_only=True)
+    last_name  = serializers.CharField(source='user.last_name', read_only=True)
 
     class Meta:
         model = BoardMember
-        fields = ['user_id','email','avatar','role','joined_at']
+        fields = ['user_id','email', 'first_name', 'last_name','avatar','role','joined_at']
 
 class BoardSerializer(serializers.ModelSerializer):
     columns = ColumnSerializer(many=True, read_only=True)
@@ -564,3 +569,8 @@ class MemberReportSerializer(serializers.ModelSerializer):
     def get_lastActivity(self, obj):
         last_task = Task.objects.filter(members=obj).order_by('-updated_at').first()
         return last_task.updated_at if last_task else None
+
+class HistoryEventSerializer(serializers.Serializer):
+    user = serializers.EmailField()
+    action = serializers.CharField()
+    ts = serializers.IntegerField()

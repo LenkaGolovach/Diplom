@@ -36,7 +36,8 @@ from .serializers import (
     BoardSerializer, ColumnSerializer, TaskSerializer, UserSerializer,
     BoardMemberSerializer, TaskMemberSerializer, MessageSerializer, 
     MessageAttachmentSerializer, MessageUpdateSerializer,
-    ProjectReportSerializer, TaskReportSerializer, MemberReportSerializer
+    ProjectReportSerializer, TaskReportSerializer, MemberReportSerializer,
+    HistoryEventSerializer
 )
 
 # импорт разрешений и фильтров
@@ -626,3 +627,19 @@ class ReportsView(APIView):
         except Exception as e:
             logger.error(f"Unexpected error in report generation: {str(e)}", exc_info=True)
             return Response({'error': str(e)}, status=500)
+
+class TaskHistoryViewSet(viewsets.GenericViewSet):
+    permission_classes = [IsAuthenticated]
+
+    def list(self, request, task_pk=None):
+        task = get_object_or_404(Task, pk=task_pk)
+        return Response(task.history)  # history храните как JSONField
+
+    def create(self, request, task_pk=None):
+        task = get_object_or_404(Task, pk=task_pk)
+        serializer = HistoryEventSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        # добавляем в JSONField или в Related модель
+        task.history.append(serializer.validated_data)
+        task.save()
+        return Response(serializer.validated_data, status=201)
