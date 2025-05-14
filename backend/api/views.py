@@ -69,15 +69,28 @@ class BoardViewSet(viewsets.ModelViewSet):
             Q(owner=user) | Q(members__user=user)
         ).distinct()
 
-    def perform_create(self, serializer):
-        board = serializer.save(owner=self.request.user)
-        board.create_default_columns()
+    @action(detail=True, methods=['get'])
+    def history(self, request, pk=None):
+        board = self.get_object()
+        return Response(board.history)
 
-        BoardMember.objects.create(
-            user=self.request.user,
-            board=board,
-            role='owner'
-        )
+    def perform_create(self, serializer):
+        with transaction.atomic():
+            board = serializer.save(
+                owner=self.request.user,
+                history=[{  # Добавляем начальную запись сразу при создании
+                    'user': self.request.user.email,
+                    'action': f'создал проект «{serializer.validated_data['name']}»',
+                    'ts': int(timezone.now().timestamp() * 1000)
+                }]
+            )
+            board.create_default_columns()
+            
+            BoardMember.objects.create(
+                user=self.request.user,
+                board=board,
+                role='owner'
+            )
 
     @action(detail=True, methods=['post'])
     def generate_invite(self, request, pk=None):
@@ -126,6 +139,13 @@ class BoardViewSet(viewsets.ModelViewSet):
                 board=board,
                 defaults={'role': 'member'}
             )
+            if created:
+                board.history.append({
+                    'user': request.user.email,
+                    'action': 'присоединился к проекту',
+                    'ts': int(timezone.now().timestamp() * 1000)
+                })
+                board.save()
             return Response({
                 'success': True,
                 'is_new_member': created
@@ -143,13 +163,21 @@ class BoardMembersViewSet(viewsets.ModelViewSet):
         return BoardMember.objects.filter(board_id=board_id)
 
     def perform_destroy(self, instance):
-        board = instance.board
-        if instance.role == 'owner':
-            raise PermissionDenied("Нельзя удалить владельца")
-        # Check if the current user is the owner of the board
-        if board.owner != self.request.user:
-            raise PermissionDenied("Только владелец доски может удалять участников")
-        instance.delete()
+        with transaction.atomic():
+            board = Board.objects.select_for_update().get(id=instance.board_id)
+            # Повторная проверка прав
+            if board.owner != self.request.user:
+                raise PermissionDenied(...)
+            
+            email = instance.user.email
+            instance.delete()
+            
+            board.history.append({
+                'user': email,
+                'action': 'был удален из проекта',
+                'ts': int(timezone.now().timestamp() * 1000)
+            })
+            board.save()
 
     @action(detail=False, methods=['get'])
     def get_by_email(self, request, board_id=None):
@@ -189,6 +217,23 @@ class TaskViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend]
     filterset_class = TaskFilter
 
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        with transaction.atomic():
+            task = serializer.save()
+            board = task.column.board
+            board.history.append({
+                'user': request.user.email,
+                'action': f'создал задачу «{task.name}»',
+                'ts': int(timezone.now().timestamp() * 1000)
+            })
+            board.save()
+            
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
     def get_queryset(self):
         queryset = Task.objects.filter(
             column__board__members__user=self.request.user
@@ -206,43 +251,93 @@ class TaskViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
-        
-        # Log incoming data for debugging
-        logger.debug(f"UPDATE TASK REQUEST DATA: {request.data}")
-        
-        # Handle deleted files
-        deleted_files = request.data.get('deleted_files')
-        logger.debug(f"DELETED FILES DATA: {deleted_files}, TYPE: {type(deleted_files)}")
-        
-        if deleted_files:
-            try:
-                # Если передана строка JSON
-                if isinstance(deleted_files, str):
-                    deleted_file_ids = json.loads(deleted_files)
-                # Если уже список - используем как есть
-                elif isinstance(deleted_files, list):
-                    deleted_file_ids = deleted_files
-                # Если число - создаем список с одним элементом
-                elif isinstance(deleted_files, int):
-                    deleted_file_ids = [deleted_files]
-                else:
-                    deleted_file_ids = []
-                    
-                # Удаляем файлы
-                if deleted_file_ids:
+        old_name = instance.name
+        old_column_id = instance.column_id
+
+        serializer = self.get_serializer(
+            instance, 
+            data=request.data, 
+            partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+
+        with transaction.atomic():
+            # Сохраняем данные для логирования
+            logger.debug(f"UPDATE TASK REQUEST DATA: {request.data}")
+            
+            # Обрабатываем удаление файлов перед основным обновлением
+            deleted_files = request.data.get('deleted_files')
+            if deleted_files:
+                logger.debug(f"DELETED FILES DATA: {deleted_files}, TYPE: {type(deleted_files)}")
+                try:
+                    # Парсим список ID файлов для удаления
+                    if isinstance(deleted_files, str):
+                        deleted_file_ids = json.loads(deleted_files)
+                    elif isinstance(deleted_files, list):
+                        deleted_file_ids = deleted_files
+                    elif isinstance(deleted_files, int):
+                        deleted_file_ids = [deleted_files]
+                    else:
+                        deleted_file_ids = []
+
+                    # Удаляем файлы
                     for file_id in deleted_file_ids:
                         try:
                             attachment = FileAttachment.objects.get(id=file_id, task=instance)
                             attachment.delete()
                         except (FileAttachment.DoesNotExist, ValueError) as e:
                             logger.error(f"Error deleting file {file_id}: {str(e)}")
-                
-            except json.JSONDecodeError as e:
-                logger.error(f"Error parsing deleted_files JSON: {str(e)}")
-            except Exception as e:
-                logger.error(f"Error handling deleted_files: {str(e)}")
-        
-        return super().update(request, *args, **kwargs)
+
+                except json.JSONDecodeError as e:
+                    logger.error(f"Error parsing deleted_files JSON: {str(e)}")
+                except Exception as e:
+                    logger.error(f"Error handling deleted_files: {str(e)}")
+
+            # Основное обновление задачи
+            response = super().update(request, *args, **kwargs)
+            
+            # Получаем обновленный объект
+            task = self.get_object()
+            board = task.column.board
+
+            # Добавляем записи в историю
+            history_updated = False
+            
+            # Проверяем изменение названия
+            if task.name != old_name:
+                board.history.append({
+                    'user': request.user.email,
+                    'action': f'изменил название задачи «{old_name}» на «{task.name}»',
+                    'ts': int(timezone.now().timestamp() * 1000)
+                })
+                history_updated = True
+
+            # Проверяем изменение колонки
+            if task.column_id != old_column_id:
+                old_column = Column.objects.get(id=old_column_id)
+                board.history.append({
+                    'user': request.user.email,
+                    'action': f'переместил задачу «{task.name}» из колонки «{old_column.name}» в колонку «{task.column.name}»',
+                    'ts': int(timezone.now().timestamp() * 1000)
+                })
+                history_updated = True
+
+            # Сохраняем доску только если были изменения
+            if history_updated:
+                board.save()
+
+            return response
+
+    def perform_destroy(self, instance):
+        board = instance.column.board
+        name = instance.name
+        super().perform_destroy(instance)
+        board.history.append({
+            'user': self.request.user.email,
+            'action': f'удалил задачу «{name}»',
+            'ts': int(timezone.now().timestamp() * 1000)
+        })
+        board.save()
 
 class TaskMemberViewSet(viewsets.ModelViewSet):
     """

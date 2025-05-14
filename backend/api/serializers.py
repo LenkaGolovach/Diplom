@@ -6,6 +6,7 @@ import logging
 from django.core.files.base import ContentFile
 from django.conf import settings
 import os
+from datetime import date
 import uuid # Для генерации уникальных имен файлов
 
 logger = logging.getLogger(__name__)
@@ -133,18 +134,20 @@ class TaskSerializer(serializers.ModelSerializer):
     column_name = serializers.CharField(source='column.name', read_only=True)
     board_name = serializers.CharField(source='column.board.name', read_only=True)
     priority = serializers.ChoiceField(choices=Task.PRIORITY_CHOICES, required=False, default='medium')
+    due_date = serializers.DateField(allow_null=True, required=False)
     history = serializers.JSONField(read_only=True)
 
     class Meta:
         model = Task
         fields = ['id', 'name', 'description', 'column', 'column_name', 'board_name', 'history', 
-                 'created_at', 'updated_at', 'subtasks', 'attachments', 'deleted_files', 'members', 'priority']
+                 'created_at', 'updated_at', 'subtasks', 'attachments', 'deleted_files', 'members', 'priority', 'due_date']
         read_only_fields = ['created_at', 'updated_at']
         extra_kwargs = {
             'description': {'required': False, 'allow_blank': True, 'allow_null': True},
             'column': {'required': True},
             'name': {'required': True},
-            'order': {'required': False, 'default': 0, 'allow_null': True}
+            'order': {'required': False, 'default': 0, 'allow_null': True},
+            'due_date': {'required': False, 'allow_null': True},
         }
 
     def validate(self, data):
@@ -162,6 +165,14 @@ class TaskSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({'column': 'У вас нет доступа к этой колонке'})
         except Column.DoesNotExist:
             raise serializers.ValidationError({'column': 'Колонка не найдена'})
+        
+        due = data.get('due_date')
+        # при создании instance ещё нет, но можно сверить с today
+        if due and due < date.today():
+            raise serializers.ValidationError({'due_date': 'Срок не может быть раньше сегодняшнего дня'})
+        # при обновлении instance.created_at ≤ due
+        if self.instance and due and due < self.instance.created_at.date():
+            raise serializers.ValidationError({'due_date': 'Срок не может быть раньше даты создания задачи'})
         
         return data
 

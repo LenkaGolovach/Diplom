@@ -21,7 +21,7 @@
 </template>
 
 <script>
-import { ref, watch, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useStore } from 'vuex'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
@@ -35,9 +35,21 @@ export default {
     const store = useStore()
     const sessionId = ref(null)
     const messages = ref([])
-    const aiThinking = ref(false)
     const aiAvatar = '/icons/ai-avatar.png'
     const currentUser = ref(store.state.user)
+
+    const aiThinking = computed(() => {
+      if (messages.value.length === 0) return false
+      // найти последний индекс USER и AI
+      const lastUserIdx = messages.value
+        .map(m => m.sender.email !== 'ai@localhost')
+        .lastIndexOf(true)
+      const lastAIIdx = messages.value
+        .map(m => m.sender.email === 'ai@localhost')
+        .lastIndexOf(true)
+      // если было хоть одно USER-сообщение и оно позже последнего AI — считаем, что бот думает
+      return lastUserIdx > lastAIIdx
+    })
 
     // Реф на DiscussionChat
     const discussion = ref(null)
@@ -106,7 +118,6 @@ export default {
     }
 
     async function sendMessage(messageId, form, action) {
-      aiThinking.value = true
       try {
         if (action === 'delete') {
           await axios.delete(`/api/neuro-chat/${messageId}/`, {
@@ -129,16 +140,6 @@ export default {
         throw err
       }
     }
-
-    watch(
-      () => messages.value.length,
-      (newLen, oldLen) => {
-        if (aiThinking.value && newLen > oldLen) {
-          const last = messages.value[newLen - 1]
-          if (last.sender.email === 'ai@localhost') aiThinking.value = false
-        }
-      }
-    )
 
     function handleForwardToNeuro(message) {
       // Навигируем в тот же маршрут, но с query-параметром

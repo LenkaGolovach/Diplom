@@ -35,10 +35,18 @@
     </div>
 
     <div class="task-footer">
-       <!-- Тег приоритета -->
-      <div v-if="task.priority" :class="['priority-tag', `priority-${task.priority}`]">
-        {{ priorityText }}
+      <div class="info-blocks">
+        <!-- Тег приоритета -->
+        <div v-if="task.priority" :class="['priority-tag', `priority-${task.priority}`]">
+          {{ priorityText }}
+        </div>
+
+        <!-- Срок -->
+        <div v-if="task.due_date" :class="['due-tag', { 'overdue': isOverdue }]">
+          🕑 {{ formatDate(task.due_date) }}
+        </div>
       </div>
+
       <!-- Аватарки участников -->
       <div class="participants-preview">
         <div 
@@ -97,7 +105,11 @@ export default {
         case 'low': return 'Низкий';
         default: return '';
       }
-    }
+    },
+    isOverdue() {
+      if (!this.task.due_date) return false;
+      return new Date(this.task.due_date) < new Date();
+    },
   },
   methods: {
     downloadFile(attachment) {
@@ -113,7 +125,12 @@ export default {
       if (!filename) return '';
       const ext = filename.split('.').pop().toLowerCase();
       return ext.length > 4 ? ext.substring(0, 3) + '..' : ext;
-    }
+    },
+    formatDate(d) {
+      if (!d) return '';
+      const dt = new Date(d);
+      return dt.toLocaleDateString('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric' });
+    },
   }
 };
 </script>
@@ -271,7 +288,7 @@ export default {
 .task-footer {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-top: auto; /* Прижимаем футер к низу */
   padding-top: 12px; /* Отступ сверху */
   border-top: 1px solid #f1f5f9; /* Тонкий разделитель */
@@ -298,6 +315,21 @@ export default {
 .priority-tag.priority-low {
   background-color: #dbeafe; /* Светло-синий фон */
   color: #2563eb; /* Темно-синий текст */
+}
+
+.info-blocks {
+  display: flex;
+  flex-direction: column; /* приоритет сверху, срок снизу */
+  gap: 4px;
+}
+.due-tag {
+  font-size: 11px;
+  color: #006064;
+  background: #e0f7fa;
+  padding: 2px 8px;
+  border-radius: 8px;
+  white-space: nowrap;
+  font-family: inherit;
 }
 
 .participants-preview {

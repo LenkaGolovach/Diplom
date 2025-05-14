@@ -23,7 +23,7 @@
           <span class="icon">🔍</span> Поиск задач
         </router-link>
         <router-link to="/neuro-chat" class="menu-item">
-          <span class="icon">֎</span> Нейро-чат
+          <span class="icon">֎</span> Нейрочат
         </router-link>
       </div>
       

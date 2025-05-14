@@ -64,6 +64,7 @@ class Board(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     invite_token = models.UUIDField(null=True, blank=True, unique=True)
     drawing_data = models.JSONField(null=True, blank=True)
+    history = models.JSONField(default=list)
 
     def __str__(self):
         return self.name
@@ -119,10 +120,11 @@ class Task(models.Model):
     column = models.ForeignKey(Column, on_delete=models.CASCADE, related_name='tasks')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    due_date = models.DateField(null=True, blank=True, help_text="Срок выполнения задачи")
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='medium')
     order = models.PositiveIntegerField(default=0)
     history = models.JSONField(default=list, blank=True)
-    
+
     class Meta:
         ordering = ['order']
 

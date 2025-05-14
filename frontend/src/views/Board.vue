@@ -21,6 +21,9 @@
           <button @click="showMembersModal = true" class="members-button header-button">
             👥 Участники
           </button>
+          <button @click="showHistoryModal = true" class="history-button header-button">
+            📜 История
+          </button>
           <button @click="generateBoardReport" class="report-button header-button">
             <i class="fas fa-chart-bar"></i> Отчёт по проекту
           </button>
@@ -74,12 +77,20 @@
       @close="showMembersModal = false"
       @update-members="fetchBoardData"
     />
+
+    <BoardHistoryModal
+      v-if="showHistoryModal"
+      :board-id="board.id"
+      :current-user="currentUser"
+      @close="showHistoryModal = false"
+    />
   </div>
 </template>
 
 <script>
 import Column from '../components/Column.vue';
 import BoardMembersModal from '../components/BoardMembersModal.vue'
+import BoardHistoryModal from '@/components/BoardHistoryModal.vue';
 import TaskModal from '../components/TaskModal.vue';
 import Toolbar from '../components/Toolbar.vue';
 import axios from 'axios';
@@ -98,6 +109,7 @@ export default {
     Column,
     TaskModal,
     BoardMembersModal,
+    BoardHistoryModal,
     Toolbar,
   },
   props: {
@@ -123,6 +135,7 @@ export default {
       currentColumnIndex: null,
       isEditingBoardName: false,
       showMembersModal: false,
+      showHistoryModal: false,
       currentUser: null,
       // --- New properties for pan and zoom ---
       scale: 1,
@@ -348,10 +361,30 @@ export default {
       this.showModal = true;
     },
     async saveTask(taskToSave) {
-      // Логика сохранения задачи (создание или обновление)
-      // ... (код был длинным, поэтому сокращен)
-      this.closeModal();
-      await this.fetchBoardData(); // Перезагружаем данные доски
+      try {
+        let response;
+        if (taskToSave.id) {
+          // Обновление существующей задачи
+          response = await axios.patch(`/api/tasks/${taskToSave.id}/`, taskToSave, {
+            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+          });
+        } else {
+          // Создание новой задачи
+          response = await axios.post('/api/tasks/', {
+            ...taskToSave,
+            column: taskToSave.column // Убедимся, что column ID передается
+          }, {
+            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+          });
+        }
+        
+        // Обновляем данные после успешного сохранения
+        await this.fetchBoardData();
+        this.closeModal();
+      } catch (error) {
+        console.error('Ошибка сохранения задачи:', error);
+        alert('Не удалось сохранить задачу');
+      }
     },
     updateColumnTasks(columnIndex, newTasks) {
       if (this.board.columns[columnIndex]) {

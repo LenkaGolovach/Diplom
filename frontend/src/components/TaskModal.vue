@@ -84,6 +84,17 @@
               </select>
             </div>
 
+            <!-- Срок выполнения задачи -->
+            <div class="form-group due-date-group">
+              <label>Срок выполнения:</label>
+              <input
+                type="date"
+                v-model="localTask.due_date"
+                :min="localTask.created_at && formatForInput(localTask.created_at)"
+                class="form-control due-date-input"
+              />
+            </div>
+
             <!-- Прогресс-бар (только если есть подзадачи) -->
             <div v-if="hasSubtasks" class="progress-container">
               <div class="progress-bar">
@@ -632,6 +643,7 @@ export default {
         files: Array.isArray(this.task && this.task.attachments) ? [...this.task.attachments] : [],
         members: Array.isArray(this.task && this.task.members) ? [...this.task.members] : [],
         priority: this.task && this.task.priority || 'medium',
+        due_date: this.task.due_date ? this.task.due_date.split('T')[0] : null,
         column: this.task && this.task.column || null,
       },
 
@@ -682,13 +694,13 @@ export default {
       return this.$store.getters['tasks/getHistory'](this.localTask.id) || [];
     },
     availableMembers() {
-      const used = (this.localTask.members || []).map(m => m.user_id);
-      const boardMembers = (this.board && this.board.members) || [];
-      return boardMembers.filter(u =>
-        u != null &&
-        u.user_id != null &&
-        u.user_id !== this.currentUser.id &&
-        !used.includes(u.user_id)
+      // Используем id участников задачи (TaskMemberSerializer даёт поле id = user.id)
+      const usedIds = (this.localTask.members || []).map(m => m.id);
+      const all = (this.board && this.board.members) || [];
+      return all.filter(bm =>
+        bm.user_id != null &&
+        bm.user_id !== this.currentUser.id &&
+        !usedIds.includes(bm.user_id)
       );
     },
     availableMembersMap() {
@@ -703,6 +715,11 @@ export default {
         this.board.owner &&
         this.board.owner.email === this.currentUser.email
       );
+    },
+    minDueDate() {
+      return this.localTask.created_at
+        ? this.localTask.created_at.slice(0,10)
+        : new Date().toISOString().slice(0,10);
     },
   },
   watch: {
@@ -721,6 +738,7 @@ export default {
           files: Array.isArray(newTask.attachments) ? [...newTask.attachments] : [],
           members: Array.isArray(newTask.members) ? [...newTask.members] : [],
           priority: newTask.priority || 'medium',
+          due_date: newTask.due_date || null,
           column: newTask.column,
         };
         // Инициализация истории
@@ -946,34 +964,60 @@ export default {
     // ——— LOAD / SAVE ———
     async fetchTaskData() {
       if (!this.localTask.id) return;
-      const { data } = await axios.get(`/api/tasks/${this.localTask.id}/`).catch(() => ({ data: {} }));
+
+      // 1. Получаем данные
+      const { data } = await axios
+        .get(`/api/tasks/${this.localTask.id}/`)
+        .catch(() => ({ data: {} }));
+
+      // 2. Обновляем локальную задачу, нормализуя файлы и подтягивая due_date и created_at
       Object.assign(this.localTask, {
         name: data.name || '',
         description: data.description || '',
         subtasks: Array.isArray(data.subtasks) ? data.subtasks : [],
-        files: Array.isArray(data.attachments) ? data.attachments : [],
+        priority: data.priority || this.localTask.priority,
+        created_at: data.created_at || this.localTask.created_at,   // для minDueDate
+        due_date: data.due_date || null,                           // новое поле срок
         members: Array.isArray(data.members) ? data.members : [],
-        priority: data.priority || this.localTask.priority
+        files: (Array.isArray(data.attachments) ? data.attachments : [])
+          .map(a => ({
+            ...a,
+            // гарантируем, что url у нас всегда есть
+            url: a.url || a.file
+          }))
       });
+
+      // 3. Инициализация completedMap и истории (без изменений)
       if (!this._historyInitialized) {
-        (this.localTask.subtasks || []).forEach((s, idx) => { this._completedMap[idx] = !!s.completed; });
+        (this.localTask.subtasks || []).forEach((s, idx) => {
+          this._completedMap[idx] = !!s.completed;
+        });
         this._historyInitialized = true;
+
         const existing = this.$store.getters['tasks/getHistory'](this.localTask.id) || [];
         if (!existing.length) {
           this.$store.commit('tasks/INIT_HISTORY', {
             taskId: this.localTask.id,
-            events: [{ user: this.currentUser.email, action: `создал задачу «${data.name}»`, ts: Date.now() }]
+            events: [{
+              user: this.currentUser.email,
+              action: `создал задачу «${data.name}»`,
+              ts: Date.now()
+            }]
           });
         }
       }
+
+      // 4. Проверяем участие
       const me = await axios.get('/api/users/me/').catch(() => ({ data: {} }));
-      this.isParticipant = (this.localTask.members || []).some(m=>m && m.id===me.data.id);
+      this.isParticipant = (this.localTask.members || [])
+        .some(m => m && m.id === me.data.id);
     },
     async saveTask() {
       const form = new FormData();
       form.append('name', this.localTask.name || '');
       form.append('description', this.localTask.description || '');
       form.append('priority', this.localTask.priority || '');
+      form.append('due_date', this.localTask.due_date || '');
       form.append('column', this.localTask.column || '');
       form.append('subtasks', JSON.stringify(
         (this.localTask.subtasks || []).map(s => ({
@@ -1052,7 +1096,8 @@ export default {
           'Приоритет': response.data.priority,
           'Участники': (response.data.members || []).join(', '),
           'Создано': new Date(response.data.created_at).toLocaleDateString(),
-          'Обновлено': new Date(response.data.updated_at).toLocaleDateString()
+          'Обновлено': new Date(response.data.updated_at).toLocaleDateString(),
+          'Срок выполнения': new Date(response.data.due_date).toLocaleDateString()
         } ];
         XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(info), 'Задача');
         if (this.hasSubtasks) {
@@ -1090,6 +1135,12 @@ export default {
       // obj может быть либо { first_name, last_name, email }, либо { email: 'user@...' }
       const name = [obj.first_name, obj.last_name].filter(Boolean).join(' ');
       return name || obj.email || '';
+    },
+    formatForInput(dateString) {
+      if (!dateString) return null;
+      const d = new Date(dateString);
+      const pad = n => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
     },
   },
   mounted() {
@@ -1402,6 +1453,17 @@ export default {
   font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
   font-size: 15px;
   letter-spacing: 0.2px;
+}
+
+.due-date-group {
+  margin-top: 10px;
+}
+.due-date-input {
+  width: 100%;      /* чтобы не выступал вправо */
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
 }
 
 .description-input {
@@ -1855,7 +1917,9 @@ export default {
   position: relative;
   margin: 0;
   padding: 20px 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
 }
+
 .history-list::before {
   content: '';
   position: absolute;
@@ -1863,14 +1927,16 @@ export default {
   top: 0;
   bottom: 0;
   width: 2px;
-  background: #e2e8f0; /* тонкая линия ведёт вдоль элементов */
+  background: #e2e8f0;
 }
+
 .history-item {
   position: relative;
   display: flex;
   margin-bottom: 24px;
   padding-left: 40px;
 }
+
 .history-marker {
   position: absolute;
   left: 12px;
@@ -1881,39 +1947,46 @@ export default {
   background: #5b9cff;
   box-shadow: 0 0 0 4px rgba(91,156,255,0.2);
 }
+
 .history-content {
   background: rgba(255,255,255,0.8);
   border-radius: 8px;
-  padding: 12px 16px;
+  padding: 14px 18px; /* чуть больше отступы для визуального баланса */
   box-shadow: 0 2px 8px rgba(0,0,0,0.03);
   flex: 1;
 }
+
 .history-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
+
 .history-user {
   font-weight: 600;
   color: #2c3e50;
-  font-size: 14px;
+  font-size: 16px; /* увеличили с 14px */
 }
+
 .history-ts {
-  font-size: 12px;
+  font-size: 13px; /* увеличили с 12px */
   color: #94a3b8;
 }
+
 .history-action {
-  font-size: 14px;
+  font-size: 16px; /* увеличили с 14px */
   color: #4a5568;
-  line-height: 1.4;
+  line-height: 1.5;
 }
+
 .no-history {
   padding: 40px;
   text-align: center;
   color: #64748b;
   font-style: italic;
-  font-family: 'Segoe UI', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  font-size: 16px; /* чуть увеличили размер */
 }
 
 .github-section label {
