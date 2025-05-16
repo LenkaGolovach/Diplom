@@ -1,7 +1,7 @@
 <template>
   <div>
     <template v-if="showMenu">
-      <Sidebar :isOpen="isMenuOpen" />
+      <Sidebar :isOpen="isMenuOpen" @close="closeSidebar" />
       <button 
         class="menu-toggle" 
         :class="{ 'menu-toggle-shifted': isMenuOpen }"
@@ -43,6 +43,9 @@ export default {
     toggleMenu() {
       this.isMenuOpen = !this.isMenuOpen;
     },
+    closeSidebar() {
+      this.isMenuOpen = false;
+    },
     checkAuthStatus() {
       // Если токен существует, но данных пользователя нет, загружаем их
       if (this.$store.getters.isAuthenticated && !this.$store.getters.currentUser) {
@@ -67,25 +70,41 @@ export default {
 </script>
 
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Poppins', 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+}
+
+#app {
+  font-family: 'Poppins', 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-align: center;
+  color: #2c3e50;
+}
+
 .menu-toggle {
   position: fixed;
   top: 20px;
   left: 20px;
-  z-index: 1001;
+  z-index: 2001;
   padding: 12px;
   width: 45px;
   height: 45px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.95);
   border: none;
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-  font-size: 18px;
-  color: #4a5568;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+  font-size: 20px;
+  color: #333;
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
 }
@@ -93,7 +112,7 @@ export default {
 .menu-toggle:hover {
   background: rgba(255, 255, 255, 1);
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
 }
 
 .menu-toggle-shifted {

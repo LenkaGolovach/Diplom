@@ -14,21 +14,21 @@
       
       <div class="menu">
         <router-link to="/profile" class="menu-item">
-          <span class="icon">👤</span> Профиль
+          <span class="icon"><i class="fas fa-user"></i></span> Профиль
         </router-link>
         <router-link to="/boards" class="menu-item">
-          <span class="icon">📋</span> Доски
+          <span class="icon"><i class="fas fa-clipboard"></i></span> Доски
         </router-link>
         <router-link to="/search" class="menu-item">
-          <span class="icon">🔍</span> Поиск задач
+          <span class="icon"><i class="fas fa-search"></i></span> Поиск задач
         </router-link>
         <router-link to="/neuro-chat" class="menu-item">
-          <span class="icon">֎</span> Нейрочат
+          <span class="icon"><i class="fas fa-brain"></i></span> Нейрочат
         </router-link>
       </div>
       
       <button class="logout-btn" @click="logout">
-        <span class="icon">🚪</span> Выйти
+        <span class="icon"><i class="fas fa-sign-out-alt"></i></span> Выйти
       </button>
     </div>
   </div>
@@ -76,7 +76,7 @@ export default {
   box-shadow: 0 0 25px rgba(0, 0, 0, 0.1);
   transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
   padding: 30px 20px;
-  z-index: 1000;
+  z-index: 2000;
   border-right: 1px solid rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -92,6 +92,9 @@ export default {
   margin-bottom: 20px;
   border-bottom: 1px solid rgba(221, 221, 221, 0.5);
   padding-bottom: 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .sidebar-header h2 {
@@ -100,6 +103,27 @@ export default {
   color: #2c3e50;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   font-weight: 500;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #95a5a6;
+  cursor: pointer;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.close-button:hover {
+  background: rgba(231, 76, 60, 0.1);
+  color: #e74c3c;
+  transform: rotate(90deg);
 }
 
 .sidebar-content {

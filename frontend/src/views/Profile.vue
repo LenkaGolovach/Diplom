@@ -14,7 +14,7 @@
             <img :src="avatarUrl" class="avatar" alt="Avatar">
           </div>
           <button class="change-avatar-btn" @click="changeAvatar">
-            <span class="btn-icon">📷</span> Сменить аватар
+            <span class="btn-icon"><i class="fas fa-camera"></i></span> Сменить аватар
           </button>
           <input type="file" hidden ref="avatarInput" @change="uploadAvatar" accept="image/*">
         </div>
@@ -36,7 +36,7 @@
           </div>
 
           <button class="save-btn" @click="saveProfile" :disabled="saving">
-            <span class="btn-icon">💾</span> {{ saving ? 'Сохранение...' : 'Сохранить' }}
+            <span class="btn-icon"><i class="fas fa-save"></i></span> {{ saving ? 'Сохранение...' : 'Сохранить' }}
           </button>
         </div>
       </div>

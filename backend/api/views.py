@@ -80,7 +80,7 @@ class BoardViewSet(viewsets.ModelViewSet):
                 owner=self.request.user,
                 history=[{  # Добавляем начальную запись сразу при создании
                     'user': self.request.user.email,
-                    'action': f'создал проект «{serializer.validated_data['name']}»',
+                    'action': f'создал проект «{serializer.validated_data["name"]}»',
                     'ts': int(timezone.now().timestamp() * 1000)
                 }]
             )

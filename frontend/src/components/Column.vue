@@ -1,16 +1,20 @@
 <template>
   <div 
     class="column"
+    :class="{ 'column-collapsed': isCollapsed && isFixedPosition }"
     :style="columnStyle"
     @mousedown.left="startDrag"
   >
     <div 
       class="color-stripe column-drag-handle"
       :style="{ backgroundColor: column.color }"
-      
     >
     </div>
-    <div class="column-header" >
+    <div 
+      class="column-header" 
+      @click="isFixedPosition && toggleCollapse()"
+      :class="{ 'clickable': isFixedPosition }"
+    >
       <div
         v-if="!isEditing"
         class="column-title"
@@ -30,44 +34,46 @@
       <button @click.prevent.stop="deleteColumnHandler" class="delete-column-button" @mousedown.stop>×</button>
     </div>
     
-    <draggable
-      v-model="tasks"
-      group="tasks"
-      class="tasks"
-      item-key="id"
-      handle=".task-drag-handle"
-      @change="onTaskChange"
-      @mousedown.native.stop
-    >
-      <template #item="{ element }">
-        <Task 
-          :task="element" 
-          @click="openTaskModalHandler(element)"
-          @delete.stop="deleteTaskHandler(element)"
-        />
-      </template>
-    </draggable>
+    <div class="column-content" v-show="!isCollapsed || !isFixedPosition">
+      <draggable
+        v-model="tasks"
+        group="tasks"
+        class="tasks"
+        item-key="id"
+        handle=".task-drag-handle"
+        @change="onTaskChange"
+        @mousedown.native.stop
+      >
+        <template #item="{ element }">
+          <Task 
+            :task="element" 
+            @click="openTaskModalHandler(element)"
+            @delete.stop="deleteTaskHandler(element)"
+          />
+        </template>
+      </draggable>
 
-    <button 
-      v-if="!showTaskForm" 
-      class="add-task-button" 
-      @click.prevent.stop="showTaskForm = true"
-      @mousedown.stop
-    >
-      + Добавить задачу
-    </button>
-    
-    <div v-if="showTaskForm" class="new-task-form" @mousedown.stop>
-      <input 
-        ref="newTaskInput"
-        v-model="newTaskName"
-        class="new-task-input"
-        placeholder="Введите название задачи"
-        @keyup.enter="createTaskHandler"
-      />
-      <div class="new-task-actions">
-        <button @click.prevent.stop="createTaskHandler" class="save-task-button">Сохранить</button>
-        <button @click.prevent.stop="cancelTaskCreation" class="cancel-task-button">Отмена</button>
+      <button 
+        v-if="!showTaskForm" 
+        class="add-task-button" 
+        @click.prevent.stop="showTaskForm = true"
+        @mousedown.stop
+      >
+        + Добавить задачу
+      </button>
+      
+      <div v-if="showTaskForm" class="new-task-form" @mousedown.stop>
+        <input 
+          ref="newTaskInput"
+          v-model="newTaskName"
+          class="new-task-input"
+          placeholder="Введите название задачи"
+          @keyup.enter="createTaskHandler"
+        />
+        <div class="new-task-actions">
+          <button @click.prevent.stop="createTaskHandler" class="save-task-button">Сохранить</button>
+          <button @click.prevent.stop="cancelTaskCreation" class="cancel-task-button">Отмена</button>
+        </div>
       </div>
     </div>
   </div>
@@ -89,6 +95,10 @@ export default {
       type: Object,
       required: true,
     },
+    isFixedPosition: {
+      type: Boolean,
+      default: false
+    }
   },
   data() {
     return {
@@ -100,20 +110,34 @@ export default {
       dragging: false,
       dragOffsetX: 0,
       dragOffsetY: 0,
+      isCollapsed: false
     };
   },
   computed: {
     columnStyle() {
+      if (this.isFixedPosition) {
+        return {
+          zIndex: this.column.zIndex || 0,
+          // Если это фиксированная колонка, то не задаем position
+        };
+      }
       return {
         left: `${this.column.x || 0}px`,
         top: `${this.column.y || 0}px`,
         zIndex: this.column.zIndex || 0,
         position: 'absolute',
       };
-    }
+    },
   },
   methods: {
+    toggleCollapse() {
+      if (this.isFixedPosition) {
+        this.isCollapsed = !this.isCollapsed;
+      }
+    },
     startDrag(event) {
+      if (this.isFixedPosition) return; // Не перемещаем фиксированные колонки
+      
       this.dragging = true;
       this.dragOffsetX = event.clientX - this.column.x;
       this.dragOffsetY = event.clientY - this.column.y;
@@ -256,6 +280,11 @@ export default {
 </script>
 
 <style scoped>
+/* Убираем все стили для fixed-column, так как они не нужны */
+.fixed-column {
+  /* пусто */
+}
+
 .column {
   background-color: #f8f9fa;
   border-radius: 12px;
@@ -264,10 +293,28 @@ export default {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 180px);
+  /* Высота определяется только содержимым */
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
   cursor: grab;
   user-select: none;
+  height: auto; /* Принудительно устанавливаем auto height */
+  transition: transform 0.1s ease; /* Уменьшаем задержку при перемещении */
+}
+
+.column-collapsed {
+  height: auto !important; /* Показываем только заголовок и полоску */
+  max-height: 52px !important;
+  overflow: hidden;
+  padding-bottom: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: max-height 0.2s ease;
+}
+
+/* Убедимся, что цветная полоска всегда видна у свернутых колонок */
+.column-collapsed .color-stripe {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
 .column:active {
@@ -276,9 +323,15 @@ export default {
 }
 
 .color-stripe {
-  height: 6px;
+  height: 10px;
   border-radius: 12px 12px 0 0;
   margin-bottom: 10px;
+  display: block !important; /* Гарантируем, что полоска всегда отображается */
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 10;
 }
 
 .column-header {
@@ -286,6 +339,39 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 10px 15px;
+  margin-top: 15px; /* Добавляем отступ для полоски сверху */
+}
+
+.column-header.clickable {
+  cursor: pointer;
+  position: relative;
+}
+
+/* Индикатор сворачивания */
+.column-header.clickable::after {
+  content: '⌄';
+  position: absolute;
+  right: 40px;
+  font-size: 20px;
+  transition: transform 0.3s ease;
+  opacity: 0.5;
+}
+
+.column-collapsed .column-header.clickable::after {
+  transform: rotate(180deg);
+}
+
+.column-content {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  opacity: 1;
+  transition: opacity 0.2s ease;
+  height: auto;
+}
+
+.column-collapsed .column-content {
+  opacity: 0;
 }
 
 .column-title {
@@ -448,5 +534,26 @@ export default {
 .cancel-task-button:hover {
   background: rgba(231, 76, 60, 0.1);
   color: #e74c3c;
+}
+
+.column-collapsed .color-stripe {
+  height: 10px;
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* Усиление цветной полоски для фиксированных колонок */
+.column[class*='is-fixed-position'] .color-stripe {
+  height: 10px;
+  filter: saturate(1.2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Убедимся, что цветная полоска видна у фиксированных колонок */
+.column[class*='is-fixed-position'] .color-stripe {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  z-index: 2;
 }
 </style>
