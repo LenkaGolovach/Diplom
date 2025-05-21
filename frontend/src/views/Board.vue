@@ -70,7 +70,15 @@
 
     <Toolbar 
       :currentTool="currentDrawingTool"
+      :currentColor="currentColor"
+      :currentLineWidth="currentLineWidth"
+      :currentEraserSize="currentEraserSize"
+      :eraserMode="eraserMode"
       @tool-selected="handleToolSelected"
+      @color-selected="handleColorSelected"
+      @line-width-selected="handleLineWidthSelected"
+      @eraser-size-selected="handleEraserSizeSelected"
+      @eraser-mode-toggled="handleEraserModeToggled"
     />
 
     <div class="columns-container" :style="columnsContainerStyle" ref="columnsContainerRef">
@@ -80,6 +88,53 @@
         :height="canvasHeight"
         class="drawing-canvas"
       ></canvas>
+      <!-- Текстовые блоки -->
+      <div v-for="tb in textBlocks" :key="tb.id"
+        :data-id="tb.id"
+        :style="{
+          position: 'absolute',
+          left: tb.x + 'px',
+          top: tb.y + 'px',
+          width: tb.width + 'px',
+          minHeight: tb.height + 'px',
+          background: tb.selected || tb.editing ? 'rgba(255,255,255,0.95)' : 'transparent',
+          border: tb.selected || tb.editing ? '2px solid #0d6efd' : 'none',
+          borderRadius: tb.selected || tb.editing ? '8px' : '0',
+          boxShadow: tb.selected || tb.editing ? '0 2px 12px rgba(13,110,253,0.10)' : 'none',
+          zIndex: 20,
+          padding: tb.selected || tb.editing ? '8px 12px' : '0',
+          fontFamily: tb.styles.fontFamily,
+          fontSize: tb.styles.fontSize + 'px',
+          fontWeight: tb.styles.fontWeight,
+          color: tb.styles.color,
+          textAlign: tb.styles.textAlign,
+          outline: 'none',
+          cursor: tb.editing ? 'text' : (draggingBlockId === tb.id ? 'grabbing' : 'move'),
+          userSelect: tb.editing ? 'text' : 'none',
+          fontStyle: tb.styles.fontStyle,
+          textDecoration: tb.styles.textDecoration,
+          // Стили для корректного отображения ввода
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+        }"
+        :contenteditable="tb.editing"
+        @input="handleTextInput(tb, $event)"
+        @blur="handleTextBlur(tb)"
+        @mousedown.stop="handleTextBlockClick(tb, $event)"
+        @keydown="handleTextKeydown(tb, $event)"
+        tabindex="0"
+        @contextmenu.stop.prevent="handleTextBlockContextMenu(tb, $event)"
+      >
+        {{ tb.text }}
+        <!-- Маркеры resize только у активного блока -->
+        <template v-if="tb.selected || tb.editing">
+          <div v-for="corner in ['tl','tr','bl','br']" :key="corner"
+            class="resize-marker"
+            :class="'resize-' + corner"
+            @mousedown.stop="startResize(tb, $event, corner)"
+          ></div>
+        </template>
+      </div>
       <Column
         v-for="column in movableColumns"
         :key="column.id"
@@ -145,6 +200,37 @@
       @start="handleTimerStart"
       @cancel="closeTimerSettings"
     />
+
+    <!-- Панель форматирования для активного текстового блока -->
+    <div v-if="activeTextBlock" class="text-toolbar" :style="{
+      position: 'absolute',
+      left: (activeTextBlock.x + activeTextBlock.width/2 - 180) + 'px',
+      top: (activeTextBlock.y + activeTextBlock.height + 8) + 'px',
+      zIndex: 100,
+    }"
+      @mousedown="onTextToolbarMouseDown"
+    >
+      <select v-model="activeTextBlock.styles.fontFamily" @change="saveTextBlocksToDrawingData">
+        <option value="Rubik, Segoe UI, Arial, sans-serif">Rubik</option>
+        <option value="Arial, sans-serif">Arial</option>
+        <option value="Times New Roman, serif">Times New Roman</option>
+        <option value="Georgia, serif">Georgia</option>
+      </select>
+      <input type="number" min="10" max="72" v-model.number="activeTextBlock.styles.fontSize" @input="saveTextBlocksToDrawingData" style="width:48px;">
+      <button @click="toggleBold" :class="{active: activeTextBlock.styles.fontWeight === 700}"><b>B</b></button>
+      <button @click="toggleItalic" :class="{active: activeTextBlock.styles.fontStyle === 'italic'}"><svg width="18" height="18" viewBox="0 0 18 18"><text x="2" y="15" font-style="italic" font-size="16" font-family="Arial">I</text></svg></button>
+      <button @click="toggleUnderline" :class="{active: activeTextBlock.styles.textDecoration && activeTextBlock.styles.textDecoration.includes('underline')}"><svg width="18" height="18" viewBox="0 0 18 18"><text x="2" y="15" font-size="16" font-family="Arial" text-decoration="underline">U</text></svg></button>
+      <input type="color" v-model="activeTextBlock.styles.color" @input="saveTextBlocksToDrawingData">
+      <button @click="setAlign('left')" :class="{active: activeTextBlock.styles.textAlign === 'left'}" title="Выровнять по левому краю"><svg width="18" height="18" viewBox="0 0 18 18"><rect x="2" y="4" width="14" height="2" fill="#222"/><rect x="2" y="8" width="10" height="2" fill="#222"/><rect x="2" y="12" width="14" height="2" fill="#222"/></svg></button>
+      <button @click="setAlign('center')" :class="{active: activeTextBlock.styles.textAlign === 'center'}" title="Выровнять по центру"><svg width="18" height="18" viewBox="0 0 18 18"><rect x="4" y="4" width="10" height="2" fill="#222"/><rect x="2" y="8" width="14" height="2" fill="#222"/><rect x="4" y="12" width="10" height="2" fill="#222"/></svg></button>
+      <button @click="setAlign('right')" :class="{active: activeTextBlock.styles.textAlign === 'right'}" title="Выровнять по правому краю"><svg width="18" height="18" viewBox="0 0 18 18"><rect x="2" y="4" width="14" height="2" fill="#222"/><rect x="6" y="8" width="10" height="2" fill="#222"/><rect x="2" y="12" width="14" height="2" fill="#222"/></svg></button>
+      <button @click="setAlign('justify')" :class="{active: activeTextBlock.styles.textAlign === 'justify'}" title="Выровнять по ширине"><svg width="18" height="18" viewBox="0 0 18 18"><rect x="2" y="4" width="14" height="2" fill="#222"/><rect x="2" y="8" width="14" height="2" fill="#222"/><rect x="2" y="12" width="14" height="2" fill="#222"/></svg></button>
+    </div>
+
+    <!-- Контекстное меню для текстового блока -->
+    <div v-if="showTextContextMenu" class="text-context-menu" :style="{left: contextMenuX + 'px', top: contextMenuY + 'px'}">
+      <div class="context-menu-item" @click="deleteTextBlock(contextMenuBlockId)">Удалить</div>
+    </div>
   </div>
 </template>
 
@@ -235,7 +321,22 @@ export default {
       timerMinutes: 5,
       timerSeconds: 0,
       timerInterval: null,
-      showTimerEndDialog: false
+      showTimerEndDialog: false,
+      currentColor: '#222',
+      currentLineWidth: 4,
+      currentEraserSize: 20,
+      eraserMode: false,
+      textBlocks: [], // Массив текстовых блоков
+      draggingBlockId: null,
+      dragOffset: { x: 0, y: 0 },
+      resizingBlockId: null,
+      resizeCorner: null,
+      resizeStart: { x: 0, y: 0, width: 0, height: 0 },
+      textToolbarMouseDown: false,
+      showTextContextMenu: false,
+      contextMenuX: 0,
+      contextMenuY: 0,
+      contextMenuBlockId: null,
     };
   },
   computed: {
@@ -269,8 +370,10 @@ export default {
       if (!column) return '';
       
       return `Вы действительно хотите удалить колонку "${column.name}"?`;
-    }
-    // --- End of new computed property ---
+    },
+    activeTextBlock() {
+      return this.textBlocks.find(tb => tb.selected || tb.editing) || null;
+    },
   },
   watch: {
     // Добавляем наблюдатель за параметрами URL
@@ -307,6 +410,7 @@ export default {
     
     // Добавляем обработчик клавиш для быстрого выбора инструментов
     window.addEventListener('keydown', this.handleKeyDown);
+    this.$refs.drawingCanvas.addEventListener('click', this.handleCanvasClick);
   },
   beforeUnmount() {
     this.$el.removeEventListener('wheel', this.handleWheel);
@@ -325,6 +429,7 @@ export default {
       this.$refs.drawingCanvas.removeEventListener('mousedown', this.canvasMouseDown);
       this.$refs.drawingCanvas.removeEventListener('mousemove', this.canvasMouseMove);
       this.$refs.drawingCanvas.removeEventListener('mouseleave', this.removeEraserIndicator);
+      this.$refs.drawingCanvas.removeEventListener('click', this.handleCanvasClick);
     }
     window.removeEventListener('mouseup', this.canvasMouseUp);
     
@@ -387,6 +492,12 @@ export default {
         
         // Восстанавливаем состояние таймера после загрузки данных доски
         this.restoreTimerState();
+
+        this.textBlocks = (this.drawingData || []).filter(stroke => stroke.type === 'text').map(tb => ({
+          ...tb,
+          selected: false,
+          editing: false,
+        }));
 
       } catch (error) {
         console.error('Ошибка загрузки доски:', error);
@@ -702,7 +813,7 @@ export default {
       // mouseup слушаем на window, чтобы поймать отпускание кнопки даже вне холста
       window.removeEventListener('mouseup', this.canvasMouseUp); 
 
-      if (toolName === 'pencil' || toolName === 'line' || toolName === 'eraser') {
+      if (toolName === 'pencil' || toolName === 'line' || toolName === 'eraser' || toolName === 'text') {
         canvasEl.style.pointerEvents = 'auto';
         
         // Задаем курсор в зависимости от инструмента
@@ -712,15 +823,18 @@ export default {
           
           // Также добавляем класс для возможности стилизации через CSS
           canvasEl.classList.add('eraser-cursor');
-          canvasEl.classList.remove('pencil-cursor', 'line-cursor');
+          canvasEl.classList.remove('pencil-cursor', 'line-cursor', 'text-cursor');
         } else if (toolName === 'pencil') {
           canvasEl.style.cursor = 'crosshair';
           canvasEl.classList.add('pencil-cursor');
-          canvasEl.classList.remove('eraser-cursor', 'line-cursor');
-        } else { // line
+          canvasEl.classList.remove('eraser-cursor', 'line-cursor', 'text-cursor');
+        } else if (toolName === 'line') {
           canvasEl.style.cursor = 'crosshair';
           canvasEl.classList.add('line-cursor');
-          canvasEl.classList.remove('eraser-cursor', 'pencil-cursor');
+          canvasEl.classList.remove('eraser-cursor', 'pencil-cursor', 'text-cursor');
+        } else if (toolName === 'text') {
+          canvasEl.style.cursor = 'text';
+          canvasEl.classList.remove('eraser-cursor', 'pencil-cursor', 'line-cursor');
         }
         
         // Добавляем слушатели для рисования
@@ -753,32 +867,46 @@ export default {
     },
     // --- Drawing implementation methods ---
     canvasMouseDown(event) {
-      if (event.button !== 0) return; // Рисуем только левой кнопкой
-      
+      if (event.button !== 0) return;
+      const { offsetX, offsetY } = event;
       if (this.currentDrawingTool === 'pencil') {
-        this.isDrawing = true;
-        const { offsetX, offsetY } = event;
-
-        // Создаем новый штрих
-        this.currentStroke = {
-          type: 'pencil',
-          points: [{ x: offsetX, y: offsetY }],
-          color: 'black', // В будущем будет настраиваемым
-          lineWidth: 2,    // В будущем будет настраиваемым
-          lineCap: 'round',
-          lineJoin: 'round' 
-        };
-        
-        // Начинаем рисовать на холсте немедленно (для текущего штриха)
-        this.drawingContext.beginPath();
-        this.drawingContext.moveTo(offsetX, offsetY);
-        this.drawingContext.strokeStyle = this.currentStroke.color;
-        this.drawingContext.lineWidth = this.currentStroke.lineWidth;
-        this.drawingContext.lineCap = this.currentStroke.lineCap;
-        this.drawingContext.lineJoin = this.currentStroke.lineJoin;
-
-        this.$refs.drawingCanvas.addEventListener('mousemove', this.canvasMouseMove);
-        window.addEventListener('mouseup', this.canvasMouseUp); 
+        if (this.eraserMode) {
+          // Ластик
+          this.isDrawing = true;
+          this.currentStroke = {
+            type: 'eraser',
+            points: [{ x: offsetX, y: offsetY }],
+            size: this.currentEraserSize
+          };
+          this.drawingContext.globalCompositeOperation = 'destination-out';
+          this.drawingContext.fillStyle = 'rgba(0,0,0,1)'; // Цвет не важен, главное режим
+          this.drawingContext.strokeStyle = 'rgba(0,0,0,1)';
+          this.drawingContext.beginPath();
+          this.drawingContext.arc(offsetX, offsetY, this.currentEraserSize, 0, Math.PI * 2);
+          this.drawingContext.fill();
+          this.$refs.drawingCanvas.addEventListener('mousemove', this.canvasMouseMove);
+          window.addEventListener('mouseup', this.canvasMouseUp);
+        } else {
+          // Карандаш
+          this.isDrawing = true;
+          this.currentStroke = {
+            type: 'pencil',
+            points: [{ x: offsetX, y: offsetY }],
+            color: this.currentColor,
+            lineWidth: this.currentLineWidth,
+            lineCap: 'round',
+            lineJoin: 'round'
+          };
+          this.drawingContext.globalCompositeOperation = 'source-over';
+          this.drawingContext.beginPath();
+          this.drawingContext.moveTo(offsetX, offsetY);
+          this.drawingContext.strokeStyle = this.currentColor;
+          this.drawingContext.lineWidth = this.currentLineWidth;
+          this.drawingContext.lineCap = 'round';
+          this.drawingContext.lineJoin = 'round';
+          this.$refs.drawingCanvas.addEventListener('mousemove', this.canvasMouseMove);
+          window.addEventListener('mouseup', this.canvasMouseUp);
+        }
       } else if (this.currentDrawingTool === 'eraser') {
         this.isDrawing = true;
         const { offsetX, offsetY } = event;
@@ -811,60 +939,32 @@ export default {
     },
     canvasMouseMove(event) {
       const { offsetX, offsetY } = event;
-      
-      // Обновляем индикатор размера ластика, если это ластик
-      if (this.currentDrawingTool === 'eraser') {
-        this.updateEraserIndicator(offsetX, offsetY);
-      }
-      
-      // Если не рисуем, просто выходим
       if (!this.isDrawing) return;
-      
-      if (this.currentDrawingTool === 'pencil' && this.currentStroke) {
-        this.currentStroke.points.push({ x: offsetX, y: offsetY });
-
-        // Продолжаем рисовать текущий путь
-        this.drawingContext.lineTo(offsetX, offsetY);
-        this.drawingContext.stroke();
-      } else if (this.currentDrawingTool === 'eraser' && this.currentStroke) {
-        this.currentStroke.points.push({ x: offsetX, y: offsetY });
-        
-        // Стираем часть рисунка с более четкими визуальными эффектами
-        this.drawingContext.save();
-        this.drawingContext.globalCompositeOperation = 'destination-out';
-        this.drawingContext.fillStyle = 'rgba(255, 255, 255, 1)';
-        this.drawingContext.strokeStyle = 'rgba(255, 255, 255, 1)';
-        
-        // Рисуем линию до предыдущей точки для непрерывного стирания
-        if (this.currentStroke.points.length > 1) {
-          const prevPoint = this.currentStroke.points[this.currentStroke.points.length - 2];
-          
-          // Рисуем толстую линию для стирания пути между точками
-          this.drawingContext.lineWidth = this.currentStroke.size * 2;
+      if (this.currentDrawingTool === 'pencil') {
+        if (this.eraserMode && this.currentStroke) {
+          this.currentStroke.points.push({ x: offsetX, y: offsetY });
+          this.drawingContext.globalCompositeOperation = 'destination-out';
+          this.drawingContext.fillStyle = 'rgba(0,0,0,1)';
+          this.drawingContext.strokeStyle = 'rgba(0,0,0,1)';
+          // ВАЖНО: выставляем ширину линии и скругления для ластика
+          this.drawingContext.lineWidth = this.currentEraserSize * 2;
           this.drawingContext.lineCap = 'round';
           this.drawingContext.lineJoin = 'round';
-          
+          if (this.currentStroke.points.length > 1) {
+            const prevPoint = this.currentStroke.points[this.currentStroke.points.length - 2];
+            this.drawingContext.beginPath();
+            this.drawingContext.moveTo(prevPoint.x, prevPoint.y);
+            this.drawingContext.lineTo(offsetX, offsetY);
+            this.drawingContext.stroke();
+          }
           this.drawingContext.beginPath();
-          this.drawingContext.moveTo(prevPoint.x, prevPoint.y);
+          this.drawingContext.arc(offsetX, offsetY, this.currentEraserSize, 0, Math.PI * 2);
+          this.drawingContext.fill();
+        } else if (this.currentStroke) {
+          this.drawingContext.globalCompositeOperation = 'source-over';
+          this.currentStroke.points.push({ x: offsetX, y: offsetY });
           this.drawingContext.lineTo(offsetX, offsetY);
           this.drawingContext.stroke();
-        }
-        
-        // Рисуем круг в текущей позиции
-        this.drawingContext.beginPath();
-        this.drawingContext.arc(offsetX, offsetY, this.currentStroke.size, 0, Math.PI * 2);
-        this.drawingContext.fill();
-        
-        this.drawingContext.restore();
-        
-        // Записываем время последнего движения ластика
-        this.lastEraserMoveTime = Date.now();
-        
-        // Если с последнего применения изменений прошло более 1 секунды,
-        // делаем промежуточное сохранение для улучшения отзывчивости
-        if (!this.lastEraserSaveTime || (this.lastEraserMoveTime - this.lastEraserSaveTime > 1000)) {
-          // Создаем новый массив без стёртых штрихов
-          this.performIntermediateEraserSave();
         }
       }
     },
@@ -971,6 +1071,8 @@ export default {
       
       // Обновляем время последнего сохранения
       this.lastEraserSaveTime = Date.now();
+      // ДОБАВЛЕНО: сохраняем изменения на сервере
+      this.saveDrawingData();
     },
     // Метод для обновления индикатора размера ластика
     updateEraserIndicator(x, y) {
@@ -1003,7 +1105,6 @@ export default {
     canvasMouseUp(event) {
       if (!this.isDrawing) return;
       if (event.button !== 0 && event.type === 'mouseup') return; 
-      
       this.isDrawing = false;
       
       if (this.currentDrawingTool === 'pencil') {
@@ -1112,6 +1213,14 @@ export default {
       
       this.$refs.drawingCanvas.removeEventListener('mousemove', this.canvasMouseMove);
       window.removeEventListener('mouseup', this.canvasMouseUp);
+      // После завершения любого штриха возвращаем режим рисования
+      if (this.drawingContext) {
+        this.drawingContext.globalCompositeOperation = 'source-over';
+      }
+      // Если был ластик — модифицируем drawingData и сохраняем
+      if (this.currentDrawingTool === 'pencil' && this.eraserMode) {
+        this.performIntermediateEraserSave();
+      }
     },
     // --- End of Drawing implementation methods ---
     // --- Method to redraw canvas from drawingData ---
@@ -1173,34 +1282,46 @@ export default {
       if (!Array.isArray(this.drawingData) || this.drawingData.length === 0) {
         return;
       }
-      
-      // Сначала сортируем штрихи, чтобы они рисовались в правильном порядке
-      // (новые поверх старых)
       const sortedStrokes = [...this.drawingData];
-      
-      // Рисуем каждый штрих
       sortedStrokes.forEach(stroke => {
         if (stroke.type === 'pencil' && stroke.points && stroke.points.length >= 2) {
-          // Применяем все стили штриха
           this.drawingContext.save();
-          
           this.drawingContext.beginPath();
           this.drawingContext.moveTo(stroke.points[0].x, stroke.points[0].y);
-          
           this.drawingContext.strokeStyle = stroke.color || 'black';
           this.drawingContext.lineWidth = stroke.lineWidth || 2;
           this.drawingContext.lineCap = stroke.lineCap || 'round';
           this.drawingContext.lineJoin = stroke.lineJoin || 'round';
-
-          // Рисуем линии между всеми точками
           for (let i = 1; i < stroke.points.length; i++) {
             this.drawingContext.lineTo(stroke.points[i].x, stroke.points[i].y);
           }
-          
           this.drawingContext.stroke();
           this.drawingContext.restore();
+        } else if (stroke.type === 'eraser' && stroke.points && stroke.points.length >= 2) {
+          this.drawingContext.save();
+          this.drawingContext.globalCompositeOperation = 'destination-out';
+          this.drawingContext.strokeStyle = 'rgba(0,0,0,1)';
+          this.drawingContext.lineWidth = (stroke.size || 20) * 2;
+          this.drawingContext.lineCap = 'round';
+          this.drawingContext.lineJoin = 'round';
+          this.drawingContext.beginPath();
+          this.drawingContext.moveTo(stroke.points[0].x, stroke.points[0].y);
+          for (let i = 1; i < stroke.points.length; i++) {
+            this.drawingContext.lineTo(stroke.points[i].x, stroke.points[i].y);
+          }
+          this.drawingContext.stroke();
+          this.drawingContext.restore();
+        } else if (stroke.type === 'eraser' && stroke.points && stroke.points.length === 1) {
+          // Если ластик — одиночная точка (клик)
+          this.drawingContext.save();
+          this.drawingContext.globalCompositeOperation = 'destination-out';
+          this.drawingContext.fillStyle = 'rgba(0,0,0,1)';
+          this.drawingContext.beginPath();
+          this.drawingContext.arc(stroke.points[0].x, stroke.points[0].y, stroke.size || 20, 0, Math.PI * 2);
+          this.drawingContext.fill();
+          this.drawingContext.restore();
         }
-        // В будущем здесь будут другие типы: line, rectangle и т.д.
+        // В будущем здесь могут быть другие типы: line, rectangle и т.д.
       });
     },
     // --- End of redraw method ---
@@ -1471,6 +1592,310 @@ export default {
       if (existingIndicator) {
         existingIndicator.remove();
       }
+    },
+    handleColorSelected(color) {
+      this.currentColor = color;
+      if (this.eraserMode) this.eraserMode = false;
+    },
+    handleLineWidthSelected(width) {
+      this.currentLineWidth = width;
+    },
+    handleEraserSizeSelected(size) {
+      this.currentEraserSize = size;
+    },
+    handleEraserModeToggled(val) {
+      this.eraserMode = val;
+    },
+    handleCanvasClick(event) {
+      if (this.currentDrawingTool === 'text') {
+        const rect = this.$refs.drawingCanvas.getBoundingClientRect();
+        const x = (event.clientX - rect.left) / this.scale - this.translateX / this.scale;
+        const y = (event.clientY - rect.top) / this.scale - this.translateY / this.scale;
+        const newBlock = {
+          id: Date.now() + Math.random(),
+          x,
+          y,
+          width: 180,
+          height: 40,
+          text: '',
+          styles: {
+            fontFamily: 'Rubik, Segoe UI, Arial, sans-serif',
+            fontSize: 18,
+            fontWeight: 400,
+            color: '#222',
+            textAlign: 'left',
+          },
+          selected: true,
+          editing: true,
+        };
+        this.textBlocks.push(newBlock);
+        this.deselectAllTextBlocksExcept(newBlock.id);
+        this.saveTextBlocksToDrawingData();
+        this.$nextTick(() => {
+          const blockEl = this.$el.querySelector(`[contenteditable][tabindex][data-id='${newBlock.id}']`);
+          if (blockEl) blockEl.focus();
+        });
+      }
+    },
+    deselectAllTextBlocksExcept(id) {
+      this.textBlocks.forEach(tb => { tb.selected = tb.id === id; tb.editing = tb.id === id; });
+    },
+    saveTextBlocksToDrawingData() {
+      // Сохраняем все текстовые блоки в drawingData
+      const other = this.drawingData.filter(stroke => stroke.type !== 'text');
+      const textStrokes = this.textBlocks.map(tb => ({
+        type: 'text',
+        id: tb.id,
+        x: tb.x,
+        y: tb.y,
+        width: tb.width,
+        height: tb.height,
+        text: tb.text,
+        styles: tb.styles,
+      }));
+      this.drawingData = [...other, ...textStrokes];
+      this.saveDrawingData();
+    },
+    handleTextInput(tb, event) {
+      const element = event.target;
+      const selection = window.getSelection();
+      let savedRange = null;
+      
+      if (selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        // Проверяем, находится ли курсор внутри нашего contenteditable
+        if (element.contains(range.commonAncestorContainer)) {
+          savedRange = {
+            startContainer: range.startContainer,
+            startOffset: range.startOffset,
+            endContainer: range.endContainer,
+            endOffset: range.endOffset,
+          };
+        }
+      }
+      
+      // Обновляем текст блока
+      // Используем textContent для надежности, но теперь сохраняем позицию курсора
+      tb.text = element.textContent;
+      
+      // Восстанавливаем позицию курсора
+      if (savedRange && element.textContent.length >= savedRange.endOffset) { // Убеждаемся, что текст достаточно длинный
+        try {
+          const newRange = document.createRange();
+          // Находим текстовый узел внутри обновленного элемента
+          const textNode = element.firstChild; 
+          if (textNode && textNode.nodeType === Node.TEXT_NODE) {
+             // Убеждаемся, что смещение не выходит за границы узла
+             const endOffset = Math.min(savedRange.endOffset, textNode.length);
+             newRange.setStart(textNode, endOffset);
+             newRange.setEnd(textNode, endOffset);
+
+             selection.removeAllRanges();
+             selection.addRange(newRange);
+          } else if (!element.firstChild && element.textContent === '') {
+             // Если элемент стал пустым, устанавливаем курсор в начало
+             newRange.setStart(element, 0);
+             newRange.setEnd(element, 0);
+             selection.removeAllRanges();
+             selection.addRange(newRange);
+          }
+        } catch (e) {
+          console.error('Ошибка при восстановлении позиции курсора:', e);
+          // В случае ошибки просто оставляем курсор как есть или в начале
+        }
+      } else if (element.textContent.length > 0 && savedRange) {
+          // Если текст изменился так, что сохраненное смещение стало недействительным (например, текст сильно обрезался)
+          // Попробуем установить курсор в конец текста
+          try {
+              const newRange = document.createRange();
+              const textNode = element.firstChild;
+               if (textNode && textNode.nodeType === Node.TEXT_NODE) {
+                   newRange.setStart(textNode, textNode.length);
+                   newRange.setEnd(textNode, textNode.length);
+                   selection.removeAllRanges();
+                   selection.addRange(newRange);
+               }
+          } catch (e) {
+               console.error('Ошибка при установке курсора в конец:', e);
+          }
+      } else if (element.textContent.length > 0 && !savedRange && selection.rangeCount === 0) {
+          // Если по какой-то причине не было сохраненного Range, но текст есть и нет текущего выделения,
+          // ставим курсор в конец текста (может быть полезно при первом вводе)
+           try {
+              const newRange = document.createRange();
+              const textNode = element.firstChild;
+               if (textNode && textNode.nodeType === Node.TEXT_NODE) {
+                   newRange.setStart(textNode, textNode.length);
+                   newRange.setEnd(textNode, textNode.length);
+                   selection.removeAllRanges();
+                   selection.addRange(newRange);
+               }
+          } catch (e) {
+               console.error('Ошибка при установке курсора в конец при первом вводе:', e);
+          }
+      }
+      
+      this.saveTextBlocksToDrawingData();
+    },
+    handleTextBlur(tb) {
+      if (this.textToolbarMouseDown) {
+        // Не завершаем редактирование, если клик был по панели
+        this.textToolbarMouseDown = false;
+        tb.editing = true;
+        tb.selected = true;
+        return;
+      }
+      tb.editing = false;
+      tb.selected = false;
+      this.saveTextBlocksToDrawingData();
+      this.currentDrawingTool = 'cursor'; // Автоматически возвращаемся к курсору
+    },
+    handleTextKeydown(tb, event) {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        event.target.blur(); // Завершаем редактирование
+      }
+      // Shift+Enter — разрешаем новую строку
+      if (event.key === 'Delete' && !tb.text) {
+        // Если поле пустое и нажали Delete — удаляем блок
+        this.textBlocks = this.textBlocks.filter(b => b.id !== tb.id);
+        this.saveTextBlocksToDrawingData();
+        this.currentDrawingTool = 'cursor';
+        event.preventDefault();
+      }
+    },
+    handleTextBlockClick(tb, event) {
+      if (!tb.editing) {
+        this.deselectAllTextBlocksExcept(tb.id);
+        tb.selected = true;
+        // Начинаем drag
+        this.draggingBlockId = tb.id;
+        this.dragOffset = {
+          x: event.clientX - tb.x,
+          y: event.clientY - tb.y,
+        };
+        window.addEventListener('mousemove', this.handleBlockDrag);
+        window.addEventListener('mouseup', this.stopBlockDrag);
+      } else {
+        this.deselectAllTextBlocksExcept(tb.id);
+        tb.editing = true;
+        tb.selected = true;
+      }
+    },
+    handleBlockDrag(event) {
+      const tb = this.textBlocks.find(b => b.id === this.draggingBlockId);
+      if (!tb) return;
+      tb.x = event.clientX - this.dragOffset.x;
+      tb.y = event.clientY - this.dragOffset.y;
+      this.saveTextBlocksToDrawingData();
+    },
+    stopBlockDrag() {
+      this.draggingBlockId = null;
+      window.removeEventListener('mousemove', this.handleBlockDrag);
+      window.removeEventListener('mouseup', this.stopBlockDrag);
+    },
+    startResize(tb, event, corner) {
+      this.resizingBlockId = tb.id;
+      this.resizeCorner = corner;
+      this.resizeStart = {
+        x: event.clientX,
+        y: event.clientY,
+        width: tb.width,
+        height: tb.height,
+        blockX: tb.x,
+        blockY: tb.y,
+      };
+      window.addEventListener('mousemove', this.handleBlockResize);
+      window.addEventListener('mouseup', this.stopBlockResize);
+    },
+    handleBlockResize(event) {
+      const tb = this.textBlocks.find(b => b.id === this.resizingBlockId);
+      if (!tb) return;
+      let dx = event.clientX - this.resizeStart.x;
+      let dy = event.clientY - this.resizeStart.y;
+      let minWidth = 60, minHeight = 24;
+      if (this.resizeCorner === 'br') {
+        tb.width = Math.max(this.resizeStart.width + dx, minWidth);
+        tb.height = Math.max(this.resizeStart.height + dy, minHeight);
+      } else if (this.resizeCorner === 'tr') {
+        tb.width = Math.max(this.resizeStart.width + dx, minWidth);
+        tb.height = Math.max(this.resizeStart.height - dy, minHeight);
+        tb.y = this.resizeStart.blockY + dy;
+      } else if (this.resizeCorner === 'bl') {
+        tb.width = Math.max(this.resizeStart.width - dx, minWidth);
+        tb.x = this.resizeStart.blockX + dx;
+        tb.height = Math.max(this.resizeStart.height + dy, minHeight);
+      } else if (this.resizeCorner === 'tl') {
+        tb.width = Math.max(this.resizeStart.width - dx, minWidth);
+        tb.x = this.resizeStart.blockX + dx;
+        tb.height = Math.max(this.resizeStart.height - dy, minHeight);
+        tb.y = this.resizeStart.blockY + dy;
+      }
+      this.saveTextBlocksToDrawingData();
+    },
+    stopBlockResize() {
+      this.resizingBlockId = null;
+      this.resizeCorner = null;
+      window.removeEventListener('mousemove', this.handleBlockResize);
+      window.removeEventListener('mouseup', this.stopBlockResize);
+    },
+    toggleBold() {
+      const tb = this.activeTextBlock;
+      if (!tb) return;
+      tb.styles.fontWeight = tb.styles.fontWeight === 700 ? 400 : 700;
+      this.saveTextBlocksToDrawingData();
+    },
+    toggleItalic() {
+      const tb = this.activeTextBlock;
+      if (!tb) return;
+      tb.styles.fontStyle = tb.styles.fontStyle === 'italic' ? 'normal' : 'italic';
+      this.saveTextBlocksToDrawingData();
+    },
+    toggleUnderline() {
+      const tb = this.activeTextBlock;
+      if (!tb) return;
+      if (!tb.styles.textDecoration || tb.styles.textDecoration === 'none') {
+        tb.styles.textDecoration = 'underline';
+      } else if (tb.styles.textDecoration.includes('underline')) {
+        tb.styles.textDecoration = tb.styles.textDecoration.replace('underline', '').trim() || 'none';
+      } else {
+        tb.styles.textDecoration += ' underline';
+      }
+      this.saveTextBlocksToDrawingData();
+    },
+    setAlign(align) {
+      const tb = this.activeTextBlock;
+      if (!tb) return;
+      tb.styles.textAlign = align;
+      this.saveTextBlocksToDrawingData();
+    },
+    onTextToolbarMouseDown() {
+      this.textToolbarMouseDown = true;
+      setTimeout(() => { this.textToolbarMouseDown = false; }, 0);
+    },
+    handleTextBlockContextMenu(tb, event) {
+      event.preventDefault();
+      this.showTextContextMenu = true;
+      this.contextMenuX = event.clientX;
+      this.contextMenuY = event.clientY;
+      this.contextMenuBlockId = tb.id;
+      document.addEventListener('mousedown', this.closeTextContextMenu);
+    },
+    closeTextContextMenu(e) {
+      // Закрываем меню, если клик вне меню
+      if (!e.target.closest('.text-context-menu')) {
+        this.showTextContextMenu = false;
+        this.contextMenuBlockId = null;
+        document.removeEventListener('mousedown', this.closeTextContextMenu);
+      }
+    },
+    deleteTextBlock(id) {
+      this.textBlocks = this.textBlocks.filter(tb => tb.id !== id);
+      this.saveTextBlocksToDrawingData();
+      this.showTextContextMenu = false;
+      this.contextMenuBlockId = null;
+      document.removeEventListener('mousedown', this.closeTextContextMenu);
+      this.currentDrawingTool = 'cursor';
     },
   },
 };
@@ -1980,5 +2405,93 @@ export default {
   width: 40px !important;
   height: 40px !important;
   box-shadow: 0 0 0 1px white;
+}
+
+.resize-marker {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: #fff;
+  border: 2px solid #0d6efd;
+  border-radius: 3px;
+  box-shadow: 0 1px 4px rgba(13,110,253,0.10);
+  z-index: 30;
+  transition: box-shadow 0.15s, border 0.15s;
+  cursor: pointer;
+}
+.resize-marker:hover {
+  box-shadow: 0 2px 8px rgba(13,110,253,0.18);
+  border-color: #0056b3;
+}
+.resize-tl { left: -7px; top: -7px; cursor: nwse-resize; }
+.resize-tr { right: -7px; top: -7px; cursor: nesw-resize; }
+.resize-bl { left: -7px; bottom: -7px; cursor: nesw-resize; }
+.resize-br { right: -7px; bottom: -7px; cursor: nwse-resize; }
+
+.text-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.13);
+  padding: 8px 18px;
+  min-width: 220px;
+  min-height: 38px;
+  font-family: 'Rubik', 'Segoe UI', Arial, sans-serif;
+  font-size: 15px;
+  position: absolute;
+  user-select: none;
+  z-index: 100;
+}
+.text-toolbar button {
+  background: none;
+  border: none;
+  font-size: 16px;
+  padding: 4px 7px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.text-toolbar button.active, .text-toolbar button:hover {
+  background: #eaf1ff;
+  color: #0d6efd;
+}
+.text-toolbar select, .text-toolbar input[type='number'], .text-toolbar input[type='color'] {
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 15px;
+  outline: none;
+  margin-right: 2px;
+}
+.text-toolbar input[type='color'] {
+  padding: 0;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+}
+
+.text-context-menu {
+  position: fixed;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.13);
+  min-width: 120px;
+  padding: 6px 0;
+  z-index: 9999;
+  font-family: 'Rubik', 'Segoe UI', Arial, sans-serif;
+  font-size: 15px;
+  user-select: none;
+}
+.context-menu-item {
+  padding: 8px 18px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.context-menu-item:hover {
+  background: #f2f6ff;
+  color: #0d6efd;
 }
 </style>

@@ -350,10 +350,14 @@ class BoardSerializer(serializers.ModelSerializer):
     columns = ColumnSerializer(many=True, read_only=True)
     owner = UserSerializer(read_only=True)
     members = BoardMemberSerializer(many=True, read_only=True)
+    drawing_data = serializers.JSONField(required=False, allow_null=True)
 
     class Meta:
         model = Board
-        fields = '__all__'
+        fields = [
+            'id', 'name', 'description', 'owner', 'created_at', 'updated_at',
+            'invite_token', 'drawing_data', 'history', 'columns', 'members'
+        ]
         read_only_fields = ['owner']
 
     def create(self, validated_data):
